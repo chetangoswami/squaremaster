@@ -19,6 +19,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const [flash, setFlash] = useState<'none' | 'green' | 'red'>('none');
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
+  const [streak, setStreak] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [options, setOptions] = useState<number[]>([]);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -27,6 +28,12 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const weightsRef = useRef<Record<number, number>>({});
   const retryQueueRef = useRef<Question[]>([]);
   const questionsSinceRetryRef = useRef(0);
+  
+  // Anti-Repetition & Spaced Repetition State
+  const recentQuestionsRef = useRef<string[]>([]); // Strict no-repeat buffer (last 3-4 items)
+  const operandLastSeenRef = useRef<Record<number, number>>({}); // Tracks turn number when operand was last used
+  const turnCounterRef = useRef(0); // Global turn counter for this session
+
   const isKid = settings.kidMode;
   const isOptionsMode = !!settings.optionsMode;
 
@@ -67,21 +74,77 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     return () => { if (settings.smartMode) saveWeights(settings.mode, weightsRef.current, isKid); };
   }, [settings, isKid]);
 
-  const getWeightedRandom = (min: number, max: number) => {
-    const candidates: { val: number; weight: number }[] = [];
-    const weights = weightsRef.current;
-    for (let i = min; i <= max; i++) {
-        const w = weights[i] !== undefined ? weights[i] : getInitialWeight(i);
-        candidates.push({ val: i, weight: w }); 
-    }
-    let totalWeight = 0;
-    for (const item of candidates) totalWeight += item.weight;
-    let random = Math.random() * totalWeight;
-    for (const item of candidates) {
-        random -= item.weight;
-        if (random <= 0) return item.val;
-    }
-    return candidates[candidates.length - 1]?.val || min;
+  // Enhanced Probabilistic Selection Algorithm
+  // Solves "Repetitive" issues by using Weighted Random Sampling (Roulette Wheel) + Staleness Factors
+  const getSmartNumber = (min: number, max: number, avoidValues: number[] = []) => {
+      const range = max - min + 1;
+      let candidates: number[] = [];
+
+      // 1. Candidate Pool Selection
+      if (range <= 40) {
+          // Small range: Consider everyone
+          candidates = Array.from({length: range}, (_, i) => min + i);
+      } else {
+          // Large range: Sample 20 candidates + ensure some high-weight ones are considered
+          const pool = new Set<number>();
+          // Random samples
+          while(pool.size < 15) {
+              pool.add(Math.floor(Math.random() * range) + min);
+          }
+          // Explicitly add a few known "hard" numbers if they are in range
+          Object.keys(weightsRef.current).forEach(k => {
+              const val = parseInt(k);
+              if (val >= min && val <= max && weightsRef.current[val] > 1.2) {
+                 if (Math.random() > 0.5) pool.add(val); // 50% chance to include known hard ones
+              }
+          });
+          candidates = Array.from(pool);
+      }
+
+      // 2. Scoring (Weight + Staleness + Noise)
+      let totalScore = 0;
+      const scoredCandidates = candidates.map(val => {
+          // Base weight (Difficulty)
+          const weight = weightsRef.current[val] ?? getInitialWeight(val);
+          
+          // Staleness (How long since last seen?)
+          // If turnCounter is 100 and lastSeen is 10, turnsSince = 90.
+          // Multiplier grows as it stays unseen.
+          const lastSeen = operandLastSeenRef.current[val] || -10; // Default to -10 so new items feel fresh
+          const turnsSince = turnCounterRef.current - lastSeen;
+          
+          // Boost factor:
+          // Recently seen (0-3 turns): Penalty (0.1x - 0.5x)
+          // Moderately seen (4-10 turns): Normal (1.0x)
+          // Long unseen (>10 turns): Boost (1.5x - 3.0x)
+          let stalenessMult = 1.0;
+          if (turnsSince < 4) stalenessMult = 0.2; // heavy penalty for immediate repeats
+          else if (turnsSince > 15) stalenessMult = 1.5 + (Math.min(turnsSince, 50) * 0.05);
+
+          // Random Noise (prevents deterministic loops)
+          const noise = 0.8 + Math.random() * 0.4; 
+          
+          let score = weight * stalenessMult * noise;
+          
+          // Manual avoids (passed from caller)
+          if (avoidValues.includes(val)) score = 0;
+
+          totalScore += score;
+          return { val, score };
+      });
+
+      // 3. Roulette Wheel Selection
+      // Instead of just picking Max(score), we pick probabilistically.
+      // This ensures variety while still favoring high scores.
+      if (totalScore <= 0) return candidates[Math.floor(Math.random() * candidates.length)]; // Fallback
+
+      let random = Math.random() * totalScore;
+      for (const item of scoredCandidates) {
+          random -= item.score;
+          if (random <= 0) return item.val;
+      }
+
+      return scoredCandidates[scoredCandidates.length - 1].val;
   };
 
   // Improved Smart Options Generation
@@ -95,10 +158,8 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
       };
 
       if (mode === 'SQUARES') {
-          // Common square mistakes
           add((val1 - 1) ** 2);
           add((val1 + 1) ** 2);
-          // Transposition of digits (e.g. 13^2 = 169 vs 196)
           const s = answer.toString();
           if (s.length > 1) {
               const rev = parseInt(s.split('').reverse().join(''));
@@ -107,13 +168,11 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
           add(answer + 10);
           add(answer - 10);
       } else if (mode === 'MULTIPLICATION' && val2 !== undefined) {
-          // Off by one operand group
           add(val1 * (val2 + 1));
           add(val1 * (val2 - 1));
           add((val1 + 1) * val2);
           add((val1 - 1) * val2);
       } else if (mode === 'ADDITION' || mode === 'SUBTRACTION') {
-          // Off by small amounts
           add(answer + 1);
           add(answer - 1);
           add(answer + 2);
@@ -127,17 +186,14 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
           add(answer * 2);
       }
 
-      // Fallback: Random offset logic if we don't have enough options yet
       let safetyCounter = 0;
       while (opts.size < 4 && safetyCounter < 50) {
           safetyCounter++;
-          const offset = Math.floor(Math.random() * 5) + 1; // 1-5 deviation
+          const offset = Math.floor(Math.random() * 5) + 1;
           const sign = Math.random() > 0.5 ? 1 : -1;
           const val = answer + (offset * sign);
           add(val);
       }
-      
-      // Last Resort: Just increment
       while (opts.size < 4) {
           add(answer + opts.size + 1);
       }
@@ -146,6 +202,8 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   };
 
   const generateQuestion = useCallback(() => {
+    // 1. Check Retry Queue (Immediate Spaced Repetition)
+    // Only pop from retry if we've done at least 2 filler questions, or if queue is getting big
     if (settings.smartMode && retryQueueRef.current.length > 0) {
         if (questionsSinceRetryRef.current >= 2 || retryQueueRef.current.length > 3) {
             const retryQ = retryQueueRef.current.shift();
@@ -156,44 +214,64 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         }
     }
     questionsSinceRetryRef.current++;
+    turnCounterRef.current++;
 
-    let val1, val2, answer;
-    const getRandom = (min: number, max: number) => {
-        if (settings.smartMode) return getWeightedRandom(min, max);
+    // Helper to get numbers
+    const getNum = (min: number, max: number, avoid: number[] = []) => {
+        if (settings.smartMode) return getSmartNumber(min, max, avoid);
         return Math.floor(Math.random() * (max - min + 1)) + min;
     };
 
-    let q: Question;
-    switch (settings.mode) {
-        case 'SQUARES':
-            val1 = getRandom(settings.min, settings.max);
-            q = { mode: 'SQUARES', val1, answer: val1 * val1, isRetry: false } as Question;
-            break;
-        case 'ADDITION':
-            val1 = getRandom(settings.min, settings.max);
-            val2 = getRandom(settings.min2, settings.max2);
-            q = { mode: 'ADDITION', val1, val2, answer: val1 + val2, isRetry: false } as Question;
-            break;
-        case 'SUBTRACTION':
-            val1 = getRandom(settings.min, settings.max);
-            val2 = getRandom(settings.min2, settings.max2);
-            if (settings.kidMode && val2 > val1) [val1, val2] = [val2, val1];
-            q = { mode: 'SUBTRACTION', val1, val2, answer: val1 - val2, isRetry: false } as Question;
-            break;
-        case 'MULTIPLICATION':
-            val1 = getRandom(settings.min, settings.max);
-            val2 = getRandom(settings.min2, settings.max2);
-            q = { mode: 'MULTIPLICATION', val1, val2, answer: val1 * val2, isRetry: false } as Question;
-            break;
-        case 'DIVISION':
-            val2 = getRandom(settings.min2, settings.max2);
-            answer = getRandom(settings.min, settings.max);
-            val1 = val2 * answer;
-            q = { mode: 'DIVISION', val1, val2, answer, isRetry: false } as Question;
-            break;
-        default: q = { mode: 'SQUARES', val1: 2, answer: 4 } as Question;
+    let q: Question | null = null;
+    let attempts = 0;
+
+    // Retry loop to ensure we don't pick a recently seen EXACT question
+    while (attempts < 5) {
+        let val1, val2, answer;
+        
+        switch (settings.mode) {
+            case 'SQUARES':
+                val1 = getNum(settings.min, settings.max);
+                q = { mode: 'SQUARES', val1, answer: val1 * val1, isRetry: false } as Question;
+                break;
+            case 'ADDITION':
+                val1 = getNum(settings.min, settings.max);
+                val2 = getNum(settings.min2, settings.max2);
+                q = { mode: 'ADDITION', val1, val2, answer: val1 + val2, isRetry: false } as Question;
+                break;
+            case 'SUBTRACTION':
+                val1 = getNum(settings.min, settings.max);
+                val2 = getNum(settings.min2, settings.max2);
+                if (settings.kidMode && val2 > val1) [val1, val2] = [val2, val1];
+                q = { mode: 'SUBTRACTION', val1, val2, answer: val1 - val2, isRetry: false } as Question;
+                break;
+            case 'MULTIPLICATION':
+                val1 = getNum(settings.min, settings.max);
+                val2 = getNum(settings.min2, settings.max2);
+                q = { mode: 'MULTIPLICATION', val1, val2, answer: val1 * val2, isRetry: false } as Question;
+                break;
+            case 'DIVISION':
+                val2 = getNum(settings.min2, settings.max2);
+                answer = getNum(settings.min, settings.max);
+                val1 = val2 * answer;
+                q = { mode: 'DIVISION', val1, val2, answer, isRetry: false } as Question;
+                break;
+            default: 
+                q = { mode: 'SQUARES', val1: 2, answer: 4 } as Question;
+        }
+
+        // Check recent history
+        const key = q.mode === 'SQUARES' ? `${q.val1}` : `${q.val1}_${q.val2}`;
+        if (!recentQuestionsRef.current.includes(key)) {
+            // Update operand last seen stats for the chosen numbers
+            operandLastSeenRef.current[q.val1] = turnCounterRef.current;
+            if (q.val2 !== undefined) operandLastSeenRef.current[q.val2] = turnCounterRef.current;
+            break; 
+        }
+        attempts++;
     }
-    return q;
+    
+    return q!;
   }, [settings]);
 
   useEffect(() => { 
@@ -206,6 +284,13 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     setIsPlaying(true);
     setStartTime(Date.now());
     questionStartTimeRef.current = Date.now();
+    setStreak(0);
+    // Reset session specific tracking
+    turnCounterRef.current = 0;
+    operandLastSeenRef.current = {};
+    recentQuestionsRef.current = [];
+    questionsSinceRetryRef.current = 0;
+    retryQueueRef.current = [];
   };
 
   useEffect(() => {
@@ -220,12 +305,24 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     onFinish({ totalQuestions: history.length, correct: correctCount, score, history, startTime, endTime: Date.now(), problematicKeys: [] });
   };
 
-  const updateWeight = (val: number, isCorrect: boolean) => {
-      // Logic: 
-      // Correct -> Decrease weight (harder to pick, known better)
-      // Incorrect -> Increase weight (pick more often)
+  const updateWeight = (val: number, isCorrect: boolean, timeMs: number) => {
       const currentW = weightsRef.current[val] !== undefined ? weightsRef.current[val] : getInitialWeight(val);
-      const newW = isCorrect ? Math.max(0.2, currentW * 0.9) : Math.min(5.0, currentW * 1.5);
+      let newW = currentW;
+
+      if (isCorrect) {
+          // Mastery Bonus: 
+          // Fast (< 2.5s) -> significant drop
+          // Medium (< 5s) -> small drop
+          // Slow (> 5s) -> tiny drop (maintenance)
+          if (timeMs < 2500) newW = currentW * 0.7; 
+          else if (timeMs < 5000) newW = currentW * 0.9; 
+          else newW = currentW * 0.98;
+
+          newW = Math.max(0.1, newW); // Clamp minimum weight
+      } else {
+          // Penalty: Wrong answer spikes the weight
+          newW = Math.min(10.0, currentW * 2.0); 
+      }
       weightsRef.current[val] = newW;
   };
 
@@ -246,18 +343,25 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     
     setHistory(prev => [...prev, { question: currentQuestion, userAnswer: isNaN(userVal) ? 0 : userVal, isCorrect, timeTaken }]);
 
+    // Update Short Term History (Last 5 items)
+    const key = currentQuestion.mode === 'SQUARES' ? `${currentQuestion.val1}` : `${currentQuestion.val1}_${currentQuestion.val2}`;
+    recentQuestionsRef.current = [key, ...recentQuestionsRef.current].slice(0, 5);
+
     if (settings.smartMode) {
-        updateWeight(currentQuestion.val1, isCorrect);
-        if (currentQuestion.val2 !== undefined) updateWeight(currentQuestion.val2, isCorrect);
+        updateWeight(currentQuestion.val1, isCorrect, timeTaken);
+        if (currentQuestion.val2 !== undefined) updateWeight(currentQuestion.val2, isCorrect, timeTaken);
     }
 
     if (isCorrect) {
-      setScore(prev => prev + 1); setCorrectCount(prev => prev + 1);
+      setScore(prev => prev + 1); 
+      setCorrectCount(prev => prev + 1);
+      setStreak(prev => prev + 1);
       if (!skipFlash) {
           setFlash('green');
           setTimeout(() => setFlash('none'), 300);
       }
     } else {
+      setStreak(0);
       if (settings.smartMode) retryQueueRef.current.push({ ...currentQuestion, isRetry: true });
       if (!skipFlash) {
           setFlash('red');
@@ -266,13 +370,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     }
 
     setInputValue('');
-    let nextQ = generateQuestion();
-    // Avoid immediate repeat
-    let attempts = 0;
-    while (attempts < 5 && !nextQ.isRetry) {
-        if (nextQ.val1 === currentQuestion.val1 && nextQ.val2 === currentQuestion.val2) { /* retry */ } else { break; }
-        nextQ = generateQuestion(); attempts++;
-    }
+    const nextQ = generateQuestion();
     setCurrentQuestion(nextQ);
     if (isOptionsMode) setOptions(generateOptions(nextQ));
     questionStartTimeRef.current = Date.now();
@@ -381,6 +479,11 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
           <div className={`px-5 py-2 rounded-full flex items-center gap-2 ${isKid ? 'bg-indigo-50 text-indigo-900' : 'bg-[#333537] text-white'}`}>
               <span className="material-symbol text-sm">trophy</span>
               <span className="font-bold">{score}</span>
+              {streak > 2 && (
+                  <span className="ml-2 text-xs font-bold text-orange-500 animate-pulse">
+                      {streak}🔥
+                  </span>
+              )}
           </div>
 
           <div className={`w-12 h-12 rounded-full flex items-center justify-center font-mono font-bold border-2 ${timeLeft < 10 ? 'border-red-500 text-red-500' : (isKid ? 'border-indigo-200 text-indigo-900' : 'border-gray-600 text-white')}`}>
