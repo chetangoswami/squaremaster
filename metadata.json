@@ -1,0 +1,5 @@
+{
+  "name": "SquareMaster AI",
+  "description": "Adaptive mental math trainer with dual modes: high-speed drills for pros and a gamified Kid Mode for students. Features AI-powered tips via Google Gemini.",
+  "requestFramePermissions": []
+}
