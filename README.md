@@ -1,65 +1,106 @@
 # SquareMaster AI
 
-**SquareMaster AI** is an adaptive mental math application designed to master arithmetic through high-speed drills and intelligent feedback. It features two distinct experiences: a high-contrast "Pro Mode" for serious training and a playful "Kid Mode" for students (Class 2+).
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![React](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white)
+![Gemini AI](https://img.shields.io/badge/AI-Google%20Gemini-8E75B2.svg)
 
-Powered by **Google Gemini**, the app provides personalized mnemonic tricks and study advice based on your specific mistakes.
+**SquareMaster AI** is a state-of-the-art adaptive mental math trainer designed to bridge the gap between rote memorization and deep conceptual understanding. By leveraging **Google Gemini**, the application provides real-time, context-aware mnemonic strategies and personalized feedback, transforming the way users master arithmetic.
 
-## 🌟 Features
+Whether you are a competitive mental athlete looking to shave milliseconds off your calculation time or a student building foundational math skills, SquareMaster AI adapts to your learning curve using intelligent spaced repetition algorithms.
 
-### 🚀 Pro Mode
-- **High-Velocity Interface**: Minimalist, dark-themed UI inspired by top mental math tools (Zetamac).
-- **Spaced Repetition**: "Smart Mode" tracks weak numbers and prioritizes them automatically.
-- **Detailed Analytics**: Pie charts, speed metrics (Answers/Min), and mistake analysis.
+## ✨ Key Features
 
-### 🎈 Kid Mode
-- **Gamified Design**: Bright colors, bouncing animations, and "Star" rewards.
-- **Class 2 Optimized**: 
-  - Positive-only subtraction (larger number always first).
-  - One-tap presets for age-appropriate difficulty (e.g., Tables 2-5).
-  - Encouraging AI feedback and visual celebrations.
+### 🧠 Adaptive Intelligence
+-   **Smart Weighting Algorithm**: The app tracks your response latency and accuracy to identify "problem numbers." It dynamically adjusts the probability of these numbers appearing in future drills.
+-   **Contextual AI Coaching**: Utilizing the Google GenAI SDK, the system analyzes specific mistakes (e.g., $13 \times 14$) and generates unique, catchy mnemonic devices to aid retention.
 
-### 🧠 AI Integration
-- **Contextual Tips**: If you miss `13 × 14`, the AI generates a specific mental math trick for those exact numbers.
-- **Study Center**: A chat interface to ask general math questions or get study advice from an AI Math Tutor.
+### ⚡ Dual Experience Modes
+1.  **Pro Mode (Focus & Speed)**
+    -   High-contrast, dark-themed interface designed for flow state.
+    -   Minimalist visual design to reduce cognitive load.
+    -   Advanced analytics including answers per minute, accuracy distribution, and trend analysis.
 
-## 🛠️ Tech Stack
-- **Frontend**: React 19, TypeScript
-- **Styling**: Tailwind CSS
-- **AI**: Google Gemini API (`@google/genai`)
-- **Icons**: Lucide React
-- **Charts**: Recharts
+2.  **Kid Mode (Engagement & Fun)**
+    -   Gamified UI with vibrant colors, particle effects, and positive reinforcement.
+    -   Age-appropriate constraints (e.g., non-negative subtraction results).
+    -   "Star" reward system to encourage consistent practice.
 
-## 🚀 Getting Started
+### 📚 AI Study Center
+-   **Interactive Tutor**: A dedicated chat interface where users can ask conceptual questions ("Why is anything to the power of 0 equal to 1?").
+-   **Reference Tables**: Quick access to square tables and common constants.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/squaremaster-ai.git
-   cd squaremaster-ai
-   ```
+## 🛠️ Technology Stack
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+-   **Frontend Framework**: [React 18](https://react.dev/)
+-   **Language**: [TypeScript](https://www.typescriptlang.org/)
+-   **Build Tool**: [Vite](https://vitejs.dev/)
+-   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+-   **AI Integration**: [Google GenAI SDK](https://www.npmjs.com/package/@google/genai)
+-   **Visualization**: [Recharts](https://recharts.org/)
+-   **Icons**: [Lucide React](https://lucide.dev/)
 
-3. **Configure API Key**
-   - Get a free API key from [Google AI Studio](https://aistudio.google.com/).
-   - Create a `.env` file in the root directory:
-     ```
-     API_KEY=your_gemini_api_key_here
-     ```
+## 🚀 Installation & Setup
 
-4. **Run the application**
-   ```bash
-   npm start
-   ```
+Follow these steps to set up the project locally.
 
-## 🎮 Game Modes
-- **Squares**: Calculate squares of numbers (e.g., 25²).
-- **Addition**: Sum two numbers within a custom range.
-- **Subtraction**: Find the difference (Smart handling ensures positive results in Kid Mode).
-- **Multiplication**: Times tables and advanced multiplication.
-- **Division**: Calculate quotients (e.g., 20 ÷ 5).
+### Prerequisites
+-   Node.js (v18 or higher recommended)
+-   npm or yarn
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/chetangoswami/squaremaster.git
+cd squaremaster
+```
+
+### 2. Install Dependencies
+```bash
+npm install
+```
+
+### 3. Configure Environment Variables
+SquareMaster AI requires a valid Google Gemini API key to function.
+1.  Obtain an API key from [Google AI Studio](https://aistudio.google.com/).
+2.  Create a `.env` file in the project root.
+3.  Add the key:
+
+```env
+API_KEY=your_actual_api_key_here
+```
+
+### 4. Run Development Server
+```bash
+npm run dev
+```
+The application will be available at `http://localhost:3000`.
+
+## 📖 Usage Guide
+
+### Configuring a Session
+On the home screen, select your desired operation (**Squares**, **Addition**, **Subtraction**, **Multiplication**, **Division**).
+-   **Range**: Set the minimum and maximum values for the operands.
+-   **Duration**: Set the session timer (default: 60s).
+-   **Smart AI**: Toggle this to enable the adaptive difficulty algorithm.
+
+### Reviewing Results
+After a session, the Results dashboard provides:
+-   **Accuracy & Speed Metrics**: Quantitative analysis of performance.
+-   **Mistake Review**: A list of incorrect answers. Click "Get AI Trick" to receive a generated mnemonic for that specific problem.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+1.  Fork the repository.
+2.  Create a feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a Pull Request.
 
 ## 📄 License
-MIT
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+*Built with ❤️ by Chetan Goswami*
