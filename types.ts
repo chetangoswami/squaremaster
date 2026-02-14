@@ -1,3 +1,4 @@
+
 export enum AppView {
   HOME = 'HOME',
   GAME = 'GAME',
@@ -43,4 +44,15 @@ export interface GameStats {
   startTime: number;
   endTime: number;
   problematicKeys: string[];
+}
+
+export interface SessionRecord {
+  id: string;
+  timestamp: number;
+  mode: GameMode;
+  score: number;
+  total: number;
+  correct: number;
+  isKid: boolean;
+  history?: AnswerRecord[];
 }

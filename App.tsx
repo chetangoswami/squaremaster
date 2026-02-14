@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { AppView, GameSettings, GameStats } from './types';
+import { AppView, GameSettings, GameStats, SessionRecord } from './types';
 import Home from './components/Home';
 import Game from './components/Game';
 import Results from './components/Results';
 import Study from './components/Study';
 import Stats from './components/Stats';
-import { incrementGamesPlayed, loadSettings, saveSettings } from './services/storageService';
+import { incrementGamesPlayed, loadSettings, saveSettings, saveSession } from './services/storageService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
@@ -25,6 +25,7 @@ const App: React.FC = () => {
   });
 
   const [lastStats, setLastStats] = useState<GameStats | null>(null);
+  const [historicalSettings, setHistoricalSettings] = useState<GameSettings | null>(null);
 
   // Persist settings whenever they change
   useEffect(() => {
@@ -33,8 +34,45 @@ const App: React.FC = () => {
 
   const handleGameFinish = (stats: GameStats) => {
     incrementGamesPlayed(settings.kidMode);
+    
+    // Save Session History
+    const session: SessionRecord = {
+        id: Date.now().toString() + Math.random().toString().slice(2),
+        timestamp: Date.now(),
+        mode: settings.mode,
+        score: stats.score,
+        total: stats.totalQuestions,
+        correct: stats.correct,
+        isKid: settings.kidMode,
+        history: stats.history
+    };
+    saveSession(session);
+
     setLastStats(stats);
     setCurrentView(AppView.RESULTS);
+  };
+
+  const handleSessionSelect = (session: SessionRecord) => {
+      // Reconstruct GameStats from the saved session
+      setLastStats({
+          totalQuestions: session.total,
+          correct: session.correct,
+          score: session.score,
+          history: session.history || [],
+          startTime: session.timestamp, // approximate
+          endTime: session.timestamp,
+          problematicKeys: []
+      });
+
+      // Create a temporary settings object to ensure the Results view matches the session style (Kid vs Pro)
+      // We retain the current user settings for everything else, but force the mode/theme
+      setHistoricalSettings({
+          ...settings,
+          mode: session.mode,
+          kidMode: session.isKid
+      });
+
+      setCurrentView(AppView.RESULTS);
   };
 
   const renderView = () => {
@@ -56,12 +94,19 @@ const App: React.FC = () => {
           />
         );
       case AppView.RESULTS:
+        const displaySettings = historicalSettings || settings;
         return lastStats ? (
           <Results 
             stats={lastStats} 
-            settings={settings}
-            onRestart={() => setCurrentView(AppView.GAME)} 
-            onHome={() => setCurrentView(AppView.HOME)} 
+            settings={displaySettings}
+            onRestart={() => { 
+                setHistoricalSettings(null);
+                setCurrentView(AppView.GAME); 
+            }} 
+            onHome={() => { 
+                setHistoricalSettings(null);
+                setCurrentView(AppView.HOME); 
+            }} 
           />
         ) : (
           <Home settings={settings} setSettings={setSettings} changeView={setCurrentView} />
@@ -78,6 +123,7 @@ const App: React.FC = () => {
             <Stats 
                 settings={settings}
                 onBack={() => setCurrentView(AppView.HOME)}
+                onSessionSelect={handleSessionSelect}
             />
         );
       default:

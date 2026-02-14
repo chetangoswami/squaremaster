@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, GameSettings, GameMode } from '../types';
-import { clearWeights } from '../services/storageService';
+import { clearWeights, saveModeConfig, loadModeConfig } from '../services/storageService';
 
 interface HomeProps {
   settings: GameSettings;
@@ -9,7 +9,6 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
-  const [localSettings, setLocalSettings] = useState<GameSettings>(settings);
   const [cleared, setCleared] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -31,43 +30,88 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
     }
   };
 
+  // Direct update to parent state for instant persistence
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setLocalSettings(prev => ({
-      ...prev,
+    setSettings({
+      ...settings,
       [name]: type === 'checkbox' ? checked : (parseInt(value) || 0)
-    }));
+    });
   };
 
-  const handleModeChange = (mode: GameMode) => {
-    setLocalSettings(prev => ({ ...prev, mode }));
+  const handleModeChange = (newMode: GameMode) => {
+    // 1. Save current config for the OLD mode
+    const { min, max, min2, max2, duration, smartMode, optionsMode } = settings;
+    saveModeConfig(settings.mode, settings.kidMode, { min, max, min2, max2, duration, smartMode, optionsMode });
+
+    // 2. Load config for the NEW mode
+    const saved = loadModeConfig(newMode, settings.kidMode);
+    
+    // 3. Update state with defaults if no saved config
+    let newSettings: Partial<GameSettings> = saved || {};
+    
+    // Default fallbacks if switching to a mode for the first time
+    if (!saved) {
+        if (newMode === 'SQUARES') {
+            newSettings = { min: 1, max: 20 };
+        } else if (newMode === 'MULTIPLICATION') {
+            newSettings = { min: 1, max: 10, min2: 1, max2: 10 };
+        } else {
+            newSettings = { min: 1, max: 20, min2: 1, max2: 10 };
+        }
+    }
+
+    setSettings({ 
+        ...settings, 
+        mode: newMode,
+        ...newSettings
+    });
   };
 
   const toggleKidMode = () => {
-      setLocalSettings(prev => {
-          const newKidMode = !prev.kidMode;
-          if (newKidMode) {
-              return {
-                  ...prev,
-                  kidMode: true,
-                  mode: 'MULTIPLICATION', // Default entry point for kids
-                  min: 1, max: 10,
-                  min2: 1, max2: 10,
-                  duration: 120,
-                  smartMode: true,
-                  optionsMode: false
-              };
-          }
-          return { ...prev, kidMode: false, optionsMode: false };
-      });
+      const newKidMode = !settings.kidMode;
+      const targetMode = newKidMode ? 'MULTIPLICATION' : 'ADDITION';
+      
+      // Save current state before switching context
+      const { min, max, min2, max2, duration, smartMode, optionsMode } = settings;
+      saveModeConfig(settings.mode, settings.kidMode, { min, max, min2, max2, duration, smartMode, optionsMode });
+
+      // Try to load state for the target context
+      const saved = loadModeConfig(targetMode, newKidMode);
+
+      if (newKidMode) {
+          // Defaults for Kid Mode if no save
+          const defaults = saved || {
+              min: 1, max: 10,
+              min2: 1, max2: 10,
+              duration: 120,
+              smartMode: true,
+              optionsMode: false
+          };
+          setSettings({ ...settings, kidMode: true, mode: targetMode, ...defaults });
+      } else {
+          // Defaults for Normal Mode
+          const defaults = saved || {
+              min: 1, max: 20,
+              min2: 1, max2: 10,
+              duration: 60,
+              smartMode: true,
+              optionsMode: false
+          };
+          setSettings({ ...settings, kidMode: false, mode: targetMode, ...defaults });
+      }
   };
 
   const handleStart = () => {
-    let { min, max, min2, max2, duration, smartMode, mode, kidMode, optionsMode } = localSettings;
-    if (min > max) [min, max] = [max, min];
-    if (min2 > max2) [min2, max2] = [max2, min2];
-    const finalSettings = { min, max, min2, max2, duration, smartMode, mode, kidMode, optionsMode };
-    setSettings(finalSettings);
+    let { min, max, min2, max2 } = settings;
+    let changed = false;
+    
+    if (min > max) { [min, max] = [max, min]; changed = true; }
+    if (min2 > max2) { [min2, max2] = [max2, min2]; changed = true; }
+    
+    if (changed) {
+        setSettings({ ...settings, min, max, min2, max2 });
+    }
     changeView(AppView.GAME);
   };
 
@@ -85,7 +129,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
       { id: 'DIVISION', label: 'Divide', icon: 'percent' },
   ];
 
-  const isKid = localSettings.kidMode;
+  const isKid = settings.kidMode;
   // Options toggle is now available for all modes when in Kid Mode
   const showOptionsToggle = isKid;
 
@@ -130,7 +174,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
             {/* Mode Switch (Segmented Button) */}
             <div className={`flex overflow-x-auto gap-2 pb-4 mb-2 no-scrollbar`}>
                 {modes.map((m) => {
-                    const active = localSettings.mode === m.id;
+                    const active = settings.mode === m.id;
                     const activeClass = isKid ? "bg-[#e8def8] text-[#1d1b20]" : "bg-[#4f378b] text-[#eaddff]";
                     const inactiveClass = isKid ? "hover:bg-white/50 text-[#49454f]" : "hover:bg-white/5 text-[#c4c7c5]";
                     
@@ -155,7 +199,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                         <input
                             type="number"
                             name="min"
-                            value={localSettings.min}
+                            value={settings.min}
                             onChange={handleChange}
                             className="w-full bg-transparent text-xl font-medium outline-none p-0 border-none focus:ring-0"
                         />
@@ -165,21 +209,21 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                         <input
                             type="number"
                             name="max"
-                            value={localSettings.max}
+                            value={settings.max}
                             onChange={handleChange}
                             className="w-full bg-transparent text-xl font-medium outline-none p-0 border-none focus:ring-0"
                         />
                     </div>
                 </div>
 
-                {localSettings.mode !== 'SQUARES' && (
+                {settings.mode !== 'SQUARES' && (
                     <div className="grid grid-cols-2 gap-4 animate-fade-in">
                         <div className={`rounded-t-lg px-4 py-2 ${inputFill}`}>
                             <label className={`block text-xs ${isKid ? 'text-[#6750a4]' : 'text-[#d0bcff]'}`}>Operand 2 Min</label>
                             <input
                                 type="number"
                                 name="min2"
-                                value={localSettings.min2}
+                                value={settings.min2}
                                 onChange={handleChange}
                                 className="w-full bg-transparent text-xl font-medium outline-none p-0 border-none focus:ring-0"
                             />
@@ -189,7 +233,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                             <input
                                 type="number"
                                 name="max2"
-                                value={localSettings.max2}
+                                value={settings.max2}
                                 onChange={handleChange}
                                 className="w-full bg-transparent text-xl font-medium outline-none p-0 border-none focus:ring-0"
                             />
@@ -201,7 +245,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                 <div className="pt-2">
                     <div className="flex justify-between mb-2">
                         <label className={`text-sm font-medium ${isKid ? 'text-[#49454f]' : 'text-[#c4c7c5]'}`}>Duration</label>
-                        <span className={`text-sm font-bold ${primaryText}`}>{localSettings.duration}s</span>
+                        <span className={`text-sm font-bold ${primaryText}`}>{settings.duration}s</span>
                     </div>
                     <input 
                         type="range" 
@@ -209,7 +253,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                         max="300" 
                         step="10"
                         name="duration"
-                        value={localSettings.duration}
+                        value={settings.duration}
                         onChange={handleChange}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                     />
@@ -227,7 +271,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                          </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="smartMode" checked={localSettings.smartMode} onChange={handleChange} className="sr-only peer" />
+                        <input type="checkbox" name="smartMode" checked={settings.smartMode} onChange={handleChange} className="sr-only peer" />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                 </div>
@@ -244,7 +288,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                          </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" checked={localSettings.kidMode} onChange={toggleKidMode} className="sr-only peer" />
+                        <input type="checkbox" checked={settings.kidMode} onChange={toggleKidMode} className="sr-only peer" />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                 </div>
@@ -262,7 +306,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                             </div>
                        </div>
                        <label className="relative inline-flex items-center cursor-pointer">
-                           <input type="checkbox" name="optionsMode" checked={!!localSettings.optionsMode} onChange={handleChange} className="sr-only peer" />
+                           <input type="checkbox" name="optionsMode" checked={!!settings.optionsMode} onChange={handleChange} className="sr-only peer" />
                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                        </label>
                    </div>

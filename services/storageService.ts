@@ -1,8 +1,10 @@
-import { GameMode, GameSettings } from "../types";
+import { GameMode, GameSettings, SessionRecord } from "../types";
 
 const STORAGE_PREFIX = 'squaremaster_weights_';
 const STATS_KEY = 'squaremaster_global_stats';
 const SETTINGS_KEY = 'squaremaster_settings_v1';
+const MODE_CONFIG_KEY = 'squaremaster_mode_configs';
+const SESSIONS_KEY = 'squaremaster_sessions_v1';
 
 // Heuristic difficulty: 7, 8, 9, 12, 13, 14, 15 are inherently harder for most people
 const HARD_NUMBERS = [7, 8, 9, 12, 13, 14, 15, 17, 18, 19];
@@ -44,6 +46,7 @@ export const clearWeights = () => {
   });
   localStorage.removeItem(STATS_KEY);
   localStorage.removeItem(`${STATS_KEY}_kid`);
+  localStorage.removeItem(SESSIONS_KEY);
 };
 
 export const getInitialWeight = (num: number, storedWeight?: number): number => {
@@ -82,5 +85,46 @@ export const saveSettings = (settings: GameSettings) => {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch (e) {
         console.error("Failed to save settings", e);
+    }
+};
+
+export const saveModeConfig = (mode: GameMode, isKid: boolean, config: Partial<GameSettings>) => {
+    try {
+        const key = `${MODE_CONFIG_KEY}_${isKid ? 'kid' : 'norm'}`;
+        const all = JSON.parse(localStorage.getItem(key) || '{}');
+        all[mode] = config;
+        localStorage.setItem(key, JSON.stringify(all));
+    } catch (e) {
+        console.error("Failed to save mode config", e);
+    }
+};
+
+export const loadModeConfig = (mode: GameMode, isKid: boolean): Partial<GameSettings> | null => {
+     try {
+        const key = `${MODE_CONFIG_KEY}_${isKid ? 'kid' : 'norm'}`;
+        const all = JSON.parse(localStorage.getItem(key) || '{}');
+        return all[mode] || null;
+    } catch {
+        return null;
+    }
+};
+
+export const saveSession = (session: SessionRecord) => {
+    try {
+        const history = loadSessions();
+        // Keep last 50 sessions
+        const updated = [session, ...history].slice(0, 50);
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(updated));
+    } catch (e) {
+        console.error("Failed to save session", e);
+    }
+};
+
+export const loadSessions = (): SessionRecord[] => {
+    try {
+        const stored = localStorage.getItem(SESSIONS_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch {
+        return [];
     }
 };

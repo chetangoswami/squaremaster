@@ -1,21 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { GameSettings, GameMode } from '../types';
-import { loadWeights, getTotalGamesPlayed } from '../services/storageService';
+import { GameSettings, GameMode, SessionRecord } from '../types';
+import { loadWeights, getTotalGamesPlayed, loadSessions } from '../services/storageService';
 
 interface StatsProps {
   settings: GameSettings;
   onBack: () => void;
+  onSessionSelect: (session: SessionRecord) => void;
 }
 
-const Stats: React.FC<StatsProps> = ({ settings, onBack }) => {
+const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
   const [activeMode, setActiveMode] = useState<GameMode>('SQUARES');
   const [weights, setWeights] = useState<Record<number, number>>({});
   const [totalGames, setTotalGames] = useState(0);
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
 
   const isKid = settings.kidMode;
 
   useEffect(() => {
     setTotalGames(getTotalGamesPlayed(isKid));
+    // Load and filter sessions for the current profile (Kid vs Pro)
+    const allSessions = loadSessions();
+    setSessions(allSessions.filter(s => s.isKid === isKid));
   }, [isKid]);
 
   useEffect(() => {
@@ -39,6 +44,28 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack }) => {
       if (w >= 1.5) return isKid ? 'bg-red-200 text-red-800' : 'bg-[#3c1414] text-[#f2b8b5] border border-[#f2b8b5]/30';
       if (w > 1.0) return isKid ? 'bg-orange-100 text-orange-800' : 'bg-[#2a2012] text-[#ffb4ab] border border-[#ffb4ab]/30';
       return isKid ? 'bg-blue-50 text-blue-800' : 'bg-[#1e2b3b] text-[#a8c7fa]'; // In progress
+  };
+
+  const getModeIcon = (mode: GameMode) => {
+      switch(mode) {
+          case 'SQUARES': return 'square_foot';
+          case 'ADDITION': return 'add';
+          case 'SUBTRACTION': return 'remove';
+          case 'MULTIPLICATION': return 'close';
+          case 'DIVISION': return 'percent';
+          default: return 'calculate';
+      }
+  };
+
+  const getModeLabel = (mode: GameMode) => {
+      switch(mode) {
+          case 'SQUARES': return 'Squares';
+          case 'ADDITION': return 'Addition';
+          case 'SUBTRACTION': return 'Subtraction';
+          case 'MULTIPLICATION': return 'Multiplication';
+          case 'DIVISION': return 'Division';
+          default: return mode;
+      }
   };
 
   const modes: { id: GameMode; label: string }[] = [
@@ -138,6 +165,44 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack }) => {
                 <p className={`text-xs text-center mt-6 ${textSub}`}>
                     * Numbers show base operands (e.g., "12" represents 12², 12×N, etc.)
                 </p>
+            </div>
+
+            {/* Recent Sessions List */}
+            <div className={`rounded-[24px] p-6 ${surfaceContainer}`}>
+                <h2 className="text-lg font-bold mb-4">Recent Sessions</h2>
+                <div className="space-y-3">
+                    {sessions.length === 0 && (
+                        <p className={`text-sm opacity-50 text-center py-4 ${textSub}`}>No games played yet. Start a session!</p>
+                    )}
+                    {sessions.map((session) => (
+                        <div 
+                            key={session.id} 
+                            onClick={() => onSessionSelect(session)}
+                            className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-colors ${surface} hover:opacity-80 active:scale-[0.98]`}
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className={`p-3 rounded-xl flex items-center justify-center ${isKid ? 'bg-indigo-100 text-indigo-700' : 'bg-white/5 text-gray-300'}`}>
+                                    <span className="material-symbol text-xl">{getModeIcon(session.mode)}</span>
+                                </div>
+                                <div>
+                                    <div className="font-bold text-sm">{getModeLabel(session.mode)}</div>
+                                    <div className={`text-xs ${textSub}`}>{new Date(session.timestamp).toLocaleDateString()} • {new Date(session.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className={`font-mono font-bold text-xl ${session.correct === session.total ? (isKid ? 'text-green-600' : 'text-green-400') : ''}`}>
+                                    {session.score}
+                                </div>
+                                <div className={`text-xs font-medium ${textSub}`}>
+                                    {session.total > 0 ? Math.round((session.correct/session.total)*100) : 0}% Acc
+                                </div>
+                                <div className="hidden">
+                                    <span className="material-symbol text-lg opacity-50">chevron_right</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     </div>
