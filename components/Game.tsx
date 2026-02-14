@@ -28,7 +28,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const retryQueueRef = useRef<Question[]>([]);
   const questionsSinceRetryRef = useRef(0);
   const isKid = settings.kidMode;
-  const isOptionsMode = settings.kidMode && settings.optionsMode;
+  const isOptionsMode = !!settings.optionsMode;
 
   useEffect(() => {
     const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);

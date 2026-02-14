@@ -55,4 +55,6 @@ export interface SessionRecord {
   correct: number;
   isKid: boolean;
   history?: AnswerRecord[];
+  duration?: number; // seconds
+  optionsMode?: boolean;
 }

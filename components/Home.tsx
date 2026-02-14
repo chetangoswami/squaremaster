@@ -130,8 +130,8 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
   ];
 
   const isKid = settings.kidMode;
-  // Options toggle is now available for all modes when in Kid Mode
-  const showOptionsToggle = isKid;
+  // Options toggle is now available for all modes
+  const showOptionsToggle = true;
 
   // Material 3 Styles
   const pageBg = isKid ? "bg-[#fef7ff]" : "bg-[#121212]";
@@ -293,7 +293,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                     </label>
                 </div>
 
-                {/* Multiple Choice Toggle (Conditional) */}
+                {/* Multiple Choice Toggle */}
                 {showOptionsToggle && (
                    <div className="flex justify-between items-center py-2 animate-fade-in">
                        <div className="flex items-center gap-3">

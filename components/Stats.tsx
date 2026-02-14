@@ -68,6 +68,38 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
       }
   };
 
+  const getExpectedScore = (session: SessionRecord) => {
+      if (!session.duration) return null; // Legacy data might not have duration
+      
+      const minutes = session.duration / 60;
+      let rate = 20; // Base Questions Per Minute
+
+      if (session.isKid) {
+          switch (session.mode) {
+              case 'ADDITION':
+              case 'SUBTRACTION': rate = 15; break; 
+              case 'MULTIPLICATION':
+              case 'DIVISION': rate = 10; break; 
+              case 'SQUARES': rate = 10; break; 
+              default: rate = 10;
+          }
+      } else {
+          // Pro Mode rates
+          switch (session.mode) {
+              case 'SQUARES': rate = 30; break; // Fast recall
+              case 'ADDITION':
+              case 'SUBTRACTION': rate = 25; break; 
+              case 'MULTIPLICATION': rate = 20; break; 
+              case 'DIVISION': rate = 15; break; 
+          }
+      }
+
+      // Multiple Choice is generally faster for recognition
+      if (session.optionsMode) rate *= 1.25;
+
+      return Math.round(rate * minutes);
+  };
+
   const modes: { id: GameMode; label: string }[] = [
       { id: 'SQUARES', label: 'Squares' },
       { id: 'MULTIPLICATION', label: 'Multiply' },
@@ -174,34 +206,47 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
                     {sessions.length === 0 && (
                         <p className={`text-sm opacity-50 text-center py-4 ${textSub}`}>No games played yet. Start a session!</p>
                     )}
-                    {sessions.map((session) => (
-                        <div 
-                            key={session.id} 
-                            onClick={() => onSessionSelect(session)}
-                            className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-colors ${surface} hover:opacity-80 active:scale-[0.98]`}
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className={`p-3 rounded-xl flex items-center justify-center ${isKid ? 'bg-indigo-100 text-indigo-700' : 'bg-white/5 text-gray-300'}`}>
-                                    <span className="material-symbol text-xl">{getModeIcon(session.mode)}</span>
+                    {sessions.map((session) => {
+                        const expected = getExpectedScore(session);
+                        return (
+                            <div 
+                                key={session.id} 
+                                onClick={() => onSessionSelect(session)}
+                                className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-colors ${surface} hover:opacity-80 active:scale-[0.98]`}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-3 rounded-xl flex items-center justify-center ${isKid ? 'bg-indigo-100 text-indigo-700' : 'bg-white/5 text-gray-300'}`}>
+                                        <span className="material-symbol text-xl">{getModeIcon(session.mode)}</span>
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-sm flex items-center gap-2">
+                                            {getModeLabel(session.mode)}
+                                            {session.optionsMode && (
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${isKid ? 'border-indigo-200 text-indigo-700' : 'border-gray-600 text-gray-400'}`}>
+                                                    MCQ
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className={`text-xs ${textSub}`}>
+                                            {new Date(session.timestamp).toLocaleDateString()} • {session.duration ? `${session.duration}s` : ''}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <div className="font-bold text-sm">{getModeLabel(session.mode)}</div>
-                                    <div className={`text-xs ${textSub}`}>{new Date(session.timestamp).toLocaleDateString()} • {new Date(session.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                <div className="text-right">
+                                    <div className="flex flex-col items-end">
+                                        <div className={`font-mono font-bold text-xl ${session.correct === session.total ? (isKid ? 'text-green-600' : 'text-green-400') : ''}`}>
+                                            {session.score} <span className="text-xs font-normal opacity-50">/ {session.total}</span>
+                                        </div>
+                                        {expected !== null && (
+                                            <div className="text-[10px] font-medium opacity-60">
+                                                Exp: {expected}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <div className={`font-mono font-bold text-xl ${session.correct === session.total ? (isKid ? 'text-green-600' : 'text-green-400') : ''}`}>
-                                    {session.score}
-                                </div>
-                                <div className={`text-xs font-medium ${textSub}`}>
-                                    {session.total > 0 ? Math.round((session.correct/session.total)*100) : 0}% Acc
-                                </div>
-                                <div className="hidden">
-                                    <span className="material-symbol text-lg opacity-50">chevron_right</span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>

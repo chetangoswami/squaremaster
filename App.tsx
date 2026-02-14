@@ -44,7 +44,9 @@ const App: React.FC = () => {
         total: stats.totalQuestions,
         correct: stats.correct,
         isKid: settings.kidMode,
-        history: stats.history
+        history: stats.history,
+        duration: settings.duration,
+        optionsMode: !!settings.optionsMode
     };
     saveSession(session);
 
