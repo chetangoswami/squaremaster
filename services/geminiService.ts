@@ -15,21 +15,23 @@ export const getMentalMathTip = async (question: Question): Promise<string> => {
   if (!ai) return "AI unavailable (Missing API Key).";
 
   let prompt = "";
+  const baseInstruction = "Keep it concise (under 3 sentences). Use Markdown to **bold** numbers and key operands for readability.";
+
   switch (question.mode) {
       case 'SQUARES':
-          prompt = `Provide a very short, catchy mental math trick or mnemonic to instantly calculate or remember the square of ${question.val1}. Keep it under 2 sentences.`;
+          prompt = `Provide a mental math trick or mnemonic to calculate or remember ${question.val1}². ${baseInstruction}`;
           break;
       case 'MULTIPLICATION':
-          prompt = `Provide a very short, catchy mental math trick to calculate ${question.val1} multiplied by ${question.val2} mentally. Keep it under 2 sentences.`;
+          prompt = `Provide a mental math trick to calculate ${question.val1} × ${question.val2}. ${baseInstruction}`;
           break;
       case 'ADDITION':
-          prompt = `Provide a very short mental math strategy to quickly add ${question.val1} and ${question.val2}. Keep it under 2 sentences.`;
+          prompt = `Provide a mental math strategy to add ${question.val1} + ${question.val2}. ${baseInstruction}`;
           break;
       case 'SUBTRACTION':
-          prompt = `Provide a very short mental math strategy to quickly subtract ${question.val2} from ${question.val1}. Keep it under 2 sentences.`;
+          prompt = `Provide a mental math strategy to subtract ${question.val1} - ${question.val2}. ${baseInstruction}`;
           break;
       case 'DIVISION':
-          prompt = `Provide a very short mental math trick to divide ${question.val1} by ${question.val2} (Answer is ${question.answer}). Keep it under 2 sentences.`;
+          prompt = `Provide a mental math trick to divide ${question.val1} ÷ ${question.val2}. ${baseInstruction}`;
           break;
   }
 
@@ -55,7 +57,13 @@ export const getGeneralStudyAdvice = async (topic: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `You are a friendly and encouraging math tutor. The user asks: "${topic}". Provide a clear, concise explanation with examples. Use Markdown formatting.`,
+      contents: `You are an expert math tutor. The user asks: "${topic}". 
+      
+      Provide a structured response using Markdown:
+      - Use **bold** for key terms and numbers.
+      - Use bullet points or numbered lists for steps.
+      - Use code blocks for formulas (e.g., \`a² + b²\`).
+      - Keep the tone encouraging but professional.`,
     });
     return response.text || "No advice available.";
   } catch (error) {

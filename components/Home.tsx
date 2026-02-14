@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, GameSettings, GameMode } from '../types';
-import { BookOpen, ChevronRight, Settings2, Trash2, Plus, Minus, Divide, X, Brain, Baby, Sparkles, Star } from 'lucide-react';
+import { BookOpen, ChevronRight, Settings2, Trash2, Plus, Minus, Divide, X, Brain, Baby, Sparkles, Star, Zap } from 'lucide-react';
 import { clearWeights } from '../services/storageService';
 
 interface HomeProps {
@@ -89,6 +89,14 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
       { id: 'SUBTRACTION', label: 'Subtraction', icon: <Minus className="w-5 h-5" /> },
       { id: 'MULTIPLICATION', label: 'Multiply', icon: <X className="w-4 h-4" /> },
       { id: 'DIVISION', label: 'Division', icon: <Divide className="w-4 h-4" /> },
+  ];
+
+  const squarePresets = [
+    { label: "Revise 1-20", min: 1, max: 20 },
+    { label: "Learn 21-30", min: 21, max: 30 },
+    { label: "Learn 31-40", min: 31, max: 40 },
+    { label: "Learn 41-50", min: 41, max: 50 },
+    { label: "Master 1-100", min: 1, max: 100 },
   ];
 
   const getRangeLabel1 = () => {
@@ -184,7 +192,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
             <div className={innerCardClass}>
                 
                 {/* Mode Selector */}
-                <div className={`flex justify-between gap-2 mb-8 p-1.5 rounded-2xl ${isKid ? 'bg-white/60' : 'bg-slate-950/40 border border-white/5'}`}>
+                <div className={`flex justify-between gap-2 mb-6 p-1.5 rounded-2xl ${isKid ? 'bg-white/60' : 'bg-slate-950/40 border border-white/5'}`}>
                     {modes.map((m) => {
                         const isActive = localSettings.mode === m.id;
                         return (
@@ -206,8 +214,9 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                         );
                     })}
                 </div>
-
-                {isKid && (
+                
+                {/* Kid Mode Helper Presets */}
+                {isKid && localSettings.mode !== 'SQUARES' && (
                     <div className="mb-6 flex justify-center">
                         <button 
                             onClick={applyClass2Preset}
@@ -216,6 +225,31 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                             <Sparkles className="w-3 h-3" />
                             Use Class 2 Preset
                         </button>
+                    </div>
+                )}
+
+                {/* Squares Presets */}
+                {localSettings.mode === 'SQUARES' && (
+                     <div className="mb-6 animate-in fade-in slide-in-from-top-4">
+                        <label className={labelClass}>Quick Study Ranges</label>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                            {squarePresets.map(p => {
+                                const isActive = localSettings.min === p.min && localSettings.max === p.max;
+                                return (
+                                    <button
+                                        key={p.label}
+                                        onClick={() => setLocalSettings(prev => ({ ...prev, min: p.min, max: p.max }))}
+                                        className={`text-xs font-bold py-2.5 px-3 rounded-xl transition-all border ${
+                                            isActive
+                                            ? (isKid ? 'bg-sky-500 text-white border-sky-600 shadow-md' : 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-900/50')
+                                            : (isKid ? 'bg-white text-sky-400 border-sky-100 hover:bg-sky-50' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-white')
+                                        }`}
+                                    >
+                                        {p.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 

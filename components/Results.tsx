@@ -3,6 +3,7 @@ import { GameStats, AnswerRecord, GameSettings } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { RefreshCcw, Home as HomeIcon, Lightbulb, XCircle, Brain, Target, Zap, Star, Trophy, Smile } from 'lucide-react';
 import { getMentalMathTip } from '../services/geminiService';
+import ReactMarkdown from 'react-markdown';
 
 interface ResultsProps {
   stats: GameStats;
@@ -198,7 +199,12 @@ const Results: React.FC<ResultsProps> = ({ stats, settings, onRestart, onHome })
                                 {tip ? (
                                     <div className={`mt-4 pt-4 border-t text-sm leading-relaxed animate-in fade-in ${isKid ? 'border-sky-100 text-sky-700' : 'border-white/5 text-indigo-200'}`}>
                                         <span className={`font-bold block text-xs uppercase mb-1 ${isKid ? 'text-sky-400' : 'text-indigo-400'}`}>{isKid ? "Secret Trick" : "Memorization Tip"}</span>
-                                        {tip}
+                                        <ReactMarkdown components={{
+                                            strong: ({node, ...props}) => <span className={isKid ? 'font-black text-sky-600' : 'font-bold text-white'} {...props} />,
+                                            p: ({node, ...props}) => <span className="block mb-1" {...props} />
+                                        }}>
+                                            {tip}
+                                        </ReactMarkdown>
                                     </div>
                                 ) : (
                                     <button 
