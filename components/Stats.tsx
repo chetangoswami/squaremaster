@@ -15,12 +15,12 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack }) => {
   const isKid = settings.kidMode;
 
   useEffect(() => {
-    setTotalGames(getTotalGamesPlayed());
-  }, []);
+    setTotalGames(getTotalGamesPlayed(isKid));
+  }, [isKid]);
 
   useEffect(() => {
-    setWeights(loadWeights(activeMode));
-  }, [activeMode]);
+    setWeights(loadWeights(activeMode, isKid));
+  }, [activeMode, isKid]);
 
   // Determine grid range based on mode heuristics or data
   const getRange = () => {
@@ -34,6 +34,7 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack }) => {
       if (w === undefined) return isKid ? 'bg-gray-100 text-gray-400' : 'bg-[#2d2f31] text-gray-500'; // Unknown
       
       // Weight logic: < 0.8 = Mastered (Green), > 1.2 = Needs Work (Red), else Neutral
+      // Higher weight means it appeared more often or was answered incorrectly
       if (w <= 0.8) return isKid ? 'bg-green-200 text-green-800' : 'bg-[#0f291e] text-[#6dd58c] border border-[#6dd58c]/30';
       if (w >= 1.5) return isKid ? 'bg-red-200 text-red-800' : 'bg-[#3c1414] text-[#f2b8b5] border border-[#f2b8b5]/30';
       if (w > 1.0) return isKid ? 'bg-orange-100 text-orange-800' : 'bg-[#2a2012] text-[#ffb4ab] border border-[#ffb4ab]/30';
@@ -62,7 +63,7 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack }) => {
             <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
                 <span className="material-symbol">arrow_back</span>
             </button>
-            <h1 className="text-xl font-bold">Progress Stats</h1>
+            <h1 className="text-xl font-bold">Progress Stats {isKid && "(Kid Mode)"}</h1>
         </div>
 
         <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-6">

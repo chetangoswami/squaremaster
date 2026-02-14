@@ -50,7 +50,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
 
   useEffect(() => {
     if (settings.smartMode) {
-        const persisted = loadWeights(settings.mode);
+        const persisted = loadWeights(settings.mode, isKid);
         const activeWeights: Record<number, number> = {};
         const initRange = (min: number, max: number) => {
             for (let i = min; i <= max; i++) {
@@ -61,11 +61,11 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         if (settings.mode !== 'SQUARES') initRange(settings.min2, settings.max2);
         weightsRef.current = activeWeights;
     }
-  }, [settings]);
+  }, [settings, isKid]);
 
   useEffect(() => {
-    return () => { if (settings.smartMode) saveWeights(settings.mode, weightsRef.current); };
-  }, [settings]);
+    return () => { if (settings.smartMode) saveWeights(settings.mode, weightsRef.current, isKid); };
+  }, [settings, isKid]);
 
   const getWeightedRandom = (min: number, max: number) => {
     const candidates: { val: number; weight: number }[] = [];
@@ -216,8 +216,17 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   }, [timeLeft, isPlaying]);
 
   const handleFinish = () => {
-    if (settings.smartMode) saveWeights(settings.mode, weightsRef.current);
+    if (settings.smartMode) saveWeights(settings.mode, weightsRef.current, isKid);
     onFinish({ totalQuestions: history.length, correct: correctCount, score, history, startTime, endTime: Date.now(), problematicKeys: [] });
+  };
+
+  const updateWeight = (val: number, isCorrect: boolean) => {
+      // Logic: 
+      // Correct -> Decrease weight (harder to pick, known better)
+      // Incorrect -> Increase weight (pick more often)
+      const currentW = weightsRef.current[val] !== undefined ? weightsRef.current[val] : getInitialWeight(val);
+      const newW = isCorrect ? Math.max(0.2, currentW * 0.9) : Math.min(5.0, currentW * 1.5);
+      weightsRef.current[val] = newW;
   };
 
   const processAnswer = useCallback((overrideValue?: number, skipFlash?: boolean) => {
@@ -236,6 +245,11 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     const timeTaken = Date.now() - questionStartTimeRef.current;
     
     setHistory(prev => [...prev, { question: currentQuestion, userAnswer: isNaN(userVal) ? 0 : userVal, isCorrect, timeTaken }]);
+
+    if (settings.smartMode) {
+        updateWeight(currentQuestion.val1, isCorrect);
+        if (currentQuestion.val2 !== undefined) updateWeight(currentQuestion.val2, isCorrect);
+    }
 
     if (isCorrect) {
       setScore(prev => prev + 1); setCorrectCount(prev => prev + 1);
@@ -429,10 +443,10 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
 
                     return (
                         <button
-                            key={idx}
+                            key={`${idx}-${questionStartTimeRef.current}`}
                             onClick={() => handleOptionClick(opt)}
                             disabled={selectedOption !== null}
-                            className={`h-24 rounded-2xl text-4xl font-bold transition-all active:scale-95 shadow-sm ${btnClass}`}
+                            className={`h-24 rounded-2xl text-4xl font-bold transition-all active:scale-95 shadow-sm focus:outline-none ${btnClass}`}
                         >
                             {opt}
                         </button>
