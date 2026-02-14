@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Delete, Check, GripHorizontal } from 'lucide-react';
 
 interface DraggableNumpadProps {
   onInput: (digit: string) => void;
@@ -15,15 +14,13 @@ const DraggableNumpad: React.FC<DraggableNumpadProps> = ({ onInput, onEnter, onD
   const numpadRef = useRef<HTMLDivElement>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Initialize position to center bottom
   useEffect(() => {
-    // Wait for mount to get window dimensions
-    const width = Math.min(300, window.innerWidth - 40);
+    const width = Math.min(320, window.innerWidth - 32);
     const x = (window.innerWidth - width) / 2;
-    const y = window.innerHeight - 400; // Positioned near bottom
+    const y = window.innerHeight - 450; 
     setPosition({ 
-        x: Math.max(20, x), 
-        y: Math.max(20, y) 
+        x: Math.max(16, x), 
+        y: Math.max(16, y) 
     });
     setIsInitialized(true);
   }, []);
@@ -43,14 +40,10 @@ const DraggableNumpad: React.FC<DraggableNumpadProps> = ({ onInput, onEnter, onD
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
     e.preventDefault();
-    
     const newX = e.clientX - dragStartRef.current.x;
     const newY = e.clientY - dragStartRef.current.y;
-    
-    // Simple boundary clamping
-    const maxX = window.innerWidth - (numpadRef.current?.offsetWidth || 300);
-    const maxY = window.innerHeight - (numpadRef.current?.offsetHeight || 300);
-    
+    const maxX = window.innerWidth - (numpadRef.current?.offsetWidth || 320);
+    const maxY = window.innerHeight - (numpadRef.current?.offsetHeight || 400);
     setPosition({ 
         x: Math.max(0, Math.min(newX, maxX)), 
         y: Math.max(0, Math.min(newY, maxY)) 
@@ -64,66 +57,55 @@ const DraggableNumpad: React.FC<DraggableNumpadProps> = ({ onInput, onEnter, onD
 
   if (!isInitialized) return null;
 
-  // Styles
-  const baseClass = isKid 
-    ? "fixed z-50 w-[280px] sm:w-[320px] bg-white/95 backdrop-blur-xl border-4 border-sky-200 shadow-[0_10px_40px_rgba(14,165,233,0.3)] rounded-[32px] overflow-hidden select-none touch-none"
-    : "fixed z-50 w-[280px] sm:w-[320px] glass border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden select-none touch-none";
-    
-  const btnBase = "flex items-center justify-center text-2xl font-bold transition-all active:scale-90 h-16 rounded-xl select-none outline-none touch-manipulation";
-  
-  const numBtnClass = isKid
-    ? `${btnBase} bg-white text-sky-600 border-2 border-sky-100 shadow-[0_4px_0_#e0f2fe] active:shadow-none active:translate-y-1 hover:bg-sky-50`
-    : `${btnBase} bg-white/5 text-white hover:bg-white/10 border border-white/5 active:bg-white/20`;
-    
-  const actionBtnClass = isKid
-    ? `${btnBase} bg-green-400 text-white shadow-[0_4px_0_#15803d] active:shadow-none active:translate-y-1 hover:bg-green-500`
-    : `${btnBase} bg-indigo-600 text-white hover:bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)] active:bg-indigo-700`;
-    
-  const delBtnClass = isKid
-    ? `${btnBase} bg-red-400 text-white shadow-[0_4px_0_#b91c1c] active:shadow-none active:translate-y-1 hover:bg-red-500`
-    : `${btnBase} bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 active:bg-red-500/40`;
+  // Material 3 Styling
+  const containerClass = isKid 
+    ? "fixed z-50 w-[300px] bg-white border-2 border-indigo-100 shadow-2xl rounded-[32px] overflow-hidden select-none touch-none"
+    : "fixed z-50 w-[300px] bg-[#1e1e1e] shadow-2xl rounded-[32px] overflow-hidden select-none touch-none ring-1 ring-white/10";
 
-  const headerClass = isKid
-    ? "h-10 bg-sky-100 flex items-center justify-center cursor-grab active:cursor-grabbing border-b border-sky-200"
-    : "h-8 bg-white/5 flex items-center justify-center cursor-grab active:cursor-grabbing border-b border-white/5";
+  const btnBase = "w-16 h-16 rounded-full flex items-center justify-center text-2xl font-medium transition-transform active:scale-95 select-none outline-none";
+  
+  // Theme Colors
+  const numColor = isKid ? "bg-indigo-50 text-indigo-900 hover:bg-indigo-100" : "bg-[#2d2f31] text-white hover:bg-[#3d3f41]";
+  const opColor = isKid ? "bg-orange-100 text-orange-900 hover:bg-orange-200" : "bg-[#422d2d] text-[#ffb4ab] hover:bg-[#533939]";
+  const enterColor = isKid ? "bg-indigo-500 text-white hover:bg-indigo-600" : "bg-[#a8c7fa] text-[#042e85] hover:bg-[#8ab4f8]";
 
   return (
     <div 
         ref={numpadRef}
-        className={baseClass}
+        className={containerClass}
         style={{ left: position.x, top: position.y }}
     >
-        {/* Drag Handle */}
+        {/* Drag Handle Area */}
         <div 
-            className={headerClass}
+            className={`h-10 flex items-center justify-center cursor-grab active:cursor-grabbing ${isKid ? 'bg-white' : 'bg-[#1e1e1e]'}`}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
         >
-            <GripHorizontal className={`w-12 h-6 ${isKid ? 'text-sky-300' : 'text-slate-500'}`} />
+            <div className={`w-12 h-1.5 rounded-full ${isKid ? 'bg-indigo-100' : 'bg-[#444746]'}`} />
         </div>
 
-        <div className={`p-4 grid grid-cols-3 gap-3 ${isKid ? 'bg-sky-50/50' : 'bg-transparent'}`}>
+        <div className={`px-4 pb-6 grid grid-cols-3 gap-3 ${isKid ? 'bg-white' : 'bg-[#1e1e1e]'}`}>
             {[7, 8, 9, 4, 5, 6, 1, 2, 3].map(num => (
                 <button 
                     key={num} 
-                    className={numBtnClass}
+                    className={`${btnBase} ${numColor}`}
                     onClick={() => onInput(num.toString())}
                 >
                     {num}
                 </button>
             ))}
             
-            <button className={delBtnClass} onClick={onDelete}>
-                <Delete className="w-6 h-6" />
+            <button className={`${btnBase} ${opColor}`} onClick={onDelete}>
+                <span className="material-symbol">backspace</span>
             </button>
             
-            <button className={numBtnClass} onClick={() => onInput('0')}>
+            <button className={`${btnBase} ${numColor}`} onClick={() => onInput('0')}>
                 0
             </button>
             
-            <button className={actionBtnClass} onClick={onEnter}>
-                <Check className="w-8 h-8" />
+            <button className={`${btnBase} ${enterColor}`} onClick={onEnter}>
+                <span className="material-symbol">check</span>
             </button>
         </div>
     </div>
