@@ -21,6 +21,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const [correctCount, setCorrectCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [options, setOptions] = useState<number[]>([]);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
   
   const questionStartTimeRef = useRef<number>(Date.now());
   const weightsRef = useRef<Record<number, number>>({});
@@ -184,7 +185,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     onFinish({ totalQuestions: history.length, correct: correctCount, score, history, startTime, endTime: Date.now(), problematicKeys: [] });
   };
 
-  const processAnswer = useCallback((overrideValue?: number) => {
+  const processAnswer = useCallback((overrideValue?: number, skipFlash?: boolean) => {
     if (!currentQuestion || !isPlaying) return;
     
     let userVal: number;
@@ -203,12 +204,17 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
 
     if (isCorrect) {
       setScore(prev => prev + 1); setCorrectCount(prev => prev + 1);
-      setFlash('green');
+      if (!skipFlash) {
+          setFlash('green');
+          setTimeout(() => setFlash('none'), 300);
+      }
     } else {
       if (settings.smartMode) retryQueueRef.current.push({ ...currentQuestion, isRetry: true });
-      setFlash('red');
+      if (!skipFlash) {
+          setFlash('red');
+          setTimeout(() => setFlash('none'), 300);
+      }
     }
-    setTimeout(() => setFlash('none'), 300);
 
     setInputValue('');
     let nextQ = generateQuestion();
@@ -223,10 +229,27 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     questionStartTimeRef.current = Date.now();
   }, [currentQuestion, inputValue, generateQuestion, settings.smartMode, isPlaying, isOptionsMode]);
 
+  const handleOptionClick = (val: number) => {
+      if (selectedOption !== null || !isPlaying) return;
+      
+      setSelectedOption(val);
+      const isCorrect = val === currentQuestion?.answer;
+      
+      // Feedback Phase
+      setFlash(isCorrect ? 'green' : 'red');
+      setTimeout(() => setFlash('none'), 300);
+
+      // Delay to show button colors
+      setTimeout(() => {
+          processAnswer(val, true); // Commit answer, skip duplicate flash
+          setSelectedOption(null);
+      }, 700);
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => { e.preventDefault(); processAnswer(); };
 
   useEffect(() => {
-    if (isOptionsMode) return; // Disable keyboard typing in options mode for clarity, or let it work? Let's disable to focus on clicks.
+    if (isOptionsMode) return; 
     
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') { onExit(); return; }
@@ -350,19 +373,36 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         {/* Answer Area: Either Text Input or Multiple Choice Buttons */}
         {isOptionsMode ? (
             <div className="w-full max-w-lg grid grid-cols-2 gap-4 animate-fade-in">
-                {options.map((opt, idx) => (
-                    <button
-                        key={idx}
-                        onClick={() => processAnswer(opt)}
-                        className={`h-24 rounded-2xl text-4xl font-bold transition-transform active:scale-95 shadow-sm ${
-                            isKid 
-                            ? 'bg-white text-indigo-900 border-2 border-indigo-100 hover:border-indigo-300' 
-                            : 'bg-[#1e1e1e] text-[#e3e3e3] border border-white/10 hover:bg-[#2d2f31]'
-                        }`}
-                    >
-                        {opt}
-                    </button>
-                ))}
+                {options.map((opt, idx) => {
+                    let btnClass = isKid 
+                        ? 'bg-white text-indigo-900 border-2 border-indigo-100 hover:border-indigo-300' 
+                        : 'bg-[#1e1e1e] text-[#e3e3e3] border border-white/10 hover:bg-[#2d2f31]';
+                    
+                    if (selectedOption !== null) {
+                        if (opt === currentQuestion?.answer) {
+                             btnClass = isKid 
+                                ? 'bg-green-400 text-white border-green-500 shadow-md scale-105' 
+                                : 'bg-green-900 text-green-100 border-green-700';
+                        } else if (opt === selectedOption) {
+                             btnClass = isKid
+                                ? 'bg-red-400 text-white border-red-500'
+                                : 'bg-red-900 text-red-100 border-red-700';
+                        } else {
+                             btnClass += " opacity-25";
+                        }
+                    }
+
+                    return (
+                        <button
+                            key={idx}
+                            onClick={() => handleOptionClick(opt)}
+                            disabled={selectedOption !== null}
+                            className={`h-24 rounded-2xl text-4xl font-bold transition-all active:scale-95 shadow-sm ${btnClass}`}
+                        >
+                            {opt}
+                        </button>
+                    )
+                })}
             </div>
         ) : (
             <form onSubmit={handleFormSubmit} className="w-full flex justify-center">
