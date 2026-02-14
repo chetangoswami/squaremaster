@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppView, GameSettings, GameStats, Question, AnswerRecord } from '../types';
-import { X, ArrowRight, Zap, Repeat, Flame, Star, Trophy } from 'lucide-react';
+import { X, ArrowRight, Zap, Repeat, Flame, Star, Trophy, Move, Play } from 'lucide-react';
 import { loadWeights, saveWeights, getInitialWeight } from '../services/storageService';
+import DraggableNumpad from './DraggableNumpad';
 
 interface GameProps {
   settings: GameSettings;
@@ -10,6 +11,7 @@ interface GameProps {
 }
 
 const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
   const [timeLeft, setTimeLeft] = useState(settings.duration);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [inputValue, setInputValue] = useState('');
@@ -21,7 +23,6 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const [correctCount, setCorrectCount] = useState(0);
   const [streak, setStreak] = useState(0);
   
-  const inputRef = useRef<HTMLInputElement>(null);
   const questionStartTimeRef = useRef<number>(Date.now());
   const weightsRef = useRef<Record<number, number>>({});
   const retryQueueRef = useRef<Question[]>([]);
@@ -29,6 +30,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
 
   const isKid = settings.kidMode;
 
+  // Initialize Weights
   useEffect(() => {
     if (settings.smartMode) {
         const persisted = loadWeights(settings.mode);
@@ -44,6 +46,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     }
   }, [settings]);
 
+  // Save weights on unmount
   useEffect(() => {
     return () => { if (settings.smartMode) saveWeights(settings.mode, weightsRef.current); };
   }, [settings]);
@@ -94,7 +97,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         case 'SUBTRACTION':
             val1 = getRandom(settings.min, settings.max);
             val2 = getRandom(settings.min2, settings.max2);
-            // Ensure positive result for subtraction in kid mode or general good practice for basic drills
+            // Ensure positive result for kid mode
             if (settings.kidMode && val2 > val1) {
                 [val1, val2] = [val2, val1];
             }
@@ -113,17 +116,23 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     }
   }, [settings]);
 
+  // Generate first question on mount, but don't start timer/tracking yet
   useEffect(() => {
     setCurrentQuestion(generateQuestion());
-    questionStartTimeRef.current = Date.now();
-    setStartTime(Date.now());
   }, []); 
 
+  const handleStartGame = () => {
+    setIsPlaying(true);
+    setStartTime(Date.now());
+    questionStartTimeRef.current = Date.now();
+  };
+
   useEffect(() => {
+    if (!isPlaying) return;
     if (timeLeft <= 0) { handleFinish(); return; }
     const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [timeLeft, isPlaying]);
 
   const handleFinish = () => {
     if (settings.smartMode) saveWeights(settings.mode, weightsRef.current);
@@ -153,11 +162,14 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
       }
   };
 
-  const handleAnswer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentQuestion) return;
+  const processAnswer = useCallback(() => {
+    if (!currentQuestion || !isPlaying) return;
     const cleanInput = inputValue.replace('−', '-');
     const userVal = parseInt(cleanInput);
+    
+    // Prevent empty submission
+    if (inputValue.trim() === '') return;
+
     const isCorrect = userVal === currentQuestion.answer;
     const timeTaken = Date.now() - questionStartTimeRef.current;
     
@@ -176,6 +188,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
 
     setInputValue('');
     let nextQ = generateQuestion();
+    // Simple logic to avoid immediate repeat unless it's a retry
     let attempts = 0;
     while (attempts < 5 && !nextQ.isRetry) {
         if (nextQ.val1 === currentQuestion.val1 && nextQ.val2 === currentQuestion.val2) { /* retry */ } else { break; }
@@ -183,21 +196,63 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     }
     setCurrentQuestion(nextQ);
     questionStartTimeRef.current = Date.now();
+  }, [currentQuestion, inputValue, generateQuestion, settings.smartMode, isPlaying]);
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    processAnswer();
   };
 
-  // Keep focus logic - refined to ignore button clicks
+  // Global Keyboard Listener for Desktop Support
   useEffect(() => {
-    const handleBlur = (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        // If clicking a button (like exit) or inside a button, do not force focus back immediately
-        if (target.tagName === 'BUTTON' || target.closest('button')) {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        // Allow exiting with Escape always
+        if (e.key === 'Escape') {
+            onExit();
             return;
         }
-        inputRef.current?.focus(); 
+
+        // Only allow typing if playing
+        if (!isPlaying) return;
+
+        // Numbers
+        if (e.key >= '0' && e.key <= '9') {
+            setInputValue(prev => {
+                if (prev.length > 6) return prev; // Limit length
+                return prev + e.key;
+            });
+        } 
+        // Backspace
+        else if (e.key === 'Backspace') {
+            setInputValue(prev => prev.slice(0, -1));
+        } 
+        // Enter
+        else if (e.key === 'Enter') {
+            processAnswer();
+        }
+        // Minus sign
+        else if (e.key === '-' || e.key === '−') {
+             setInputValue(prev => prev.includes('-') ? prev : '-' + prev);
+        }
     };
-    document.addEventListener('click', handleBlur);
-    return () => document.removeEventListener('click', handleBlur);
-  }, []);
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [processAnswer, onExit, isPlaying]);
+
+  // Numpad Handlers with guard
+  const handleNumpadInput = (digit: string) => {
+      if (!isPlaying) return;
+      setInputValue(prev => {
+          if (prev.length > 6) return prev;
+          return prev + digit;
+      });
+  };
+
+  const handleNumpadDelete = () => {
+      if (!isPlaying) return;
+      setInputValue(prev => prev.slice(0, -1));
+  };
 
   const getOperator = () => {
       switch (currentQuestion?.mode) {
@@ -218,6 +273,44 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   return (
     <div className={`flex flex-col items-center justify-center min-h-screen relative overflow-hidden transition-colors duration-300 ${bgTransition}`}>
       
+      {/* Draggable Numpad Overlay - Always visible so it can be moved */}
+      <DraggableNumpad 
+          onInput={handleNumpadInput}
+          onDelete={handleNumpadDelete}
+          onEnter={processAnswer}
+          isKid={isKid}
+      />
+
+      {/* Start Game Overlay */}
+      {!isPlaying && (
+          <div className={`absolute inset-0 z-40 flex flex-col items-center justify-center p-6 ${isKid ? 'bg-white/60' : 'bg-black/60'} backdrop-blur-[2px] animate-in fade-in duration-300`}>
+              <div className={`max-w-md w-full text-center p-8 rounded-3xl shadow-2xl ${isKid ? 'bg-white border-4 border-sky-100' : 'glass border border-white/10'}`}>
+                  <div className="flex justify-center mb-6">
+                      <div className={`p-4 rounded-full ${isKid ? 'bg-sky-100 text-sky-500' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                          <Move className="w-8 h-8 animate-pulse" />
+                      </div>
+                  </div>
+                  <h2 className={`text-3xl font-black mb-3 ${isKid ? 'text-sky-600' : 'text-white'}`}>
+                      {isKid ? "Get Ready!" : "Setup Phase"}
+                  </h2>
+                  <p className={`mb-8 font-medium ${isKid ? 'text-sky-400' : 'text-slate-400'}`}>
+                      {isKid ? "Drag the number pad to a comfy spot, then press Start!" : "Drag the floating keypad to your preferred position to ensure it doesn't obstruct the view."}
+                  </p>
+                  <button
+                      onClick={handleStartGame}
+                      className={`w-full py-4 rounded-2xl font-black text-xl tracking-widest flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                          isKid 
+                          ? 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white shadow-[0_10px_20px_rgba(250,204,21,0.4)]' 
+                          : 'bg-indigo-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:bg-indigo-500'
+                      }`}
+                  >
+                      <Play className="w-6 h-6 fill-current" />
+                      {isKid ? "START GAME" : "START SESSION"}
+                  </button>
+              </div>
+          </div>
+      )}
+
       {/* Progress Bar */}
       <div className={`absolute top-0 left-0 w-full h-2 z-20 ${isKid ? 'bg-white' : 'bg-white/5'}`}>
         <div 
@@ -230,7 +323,6 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         {timeLeft}s
       </div>
 
-      {/* Added z-50 to ensure button is clickable over other layers */}
       <div className="absolute top-6 left-6 flex gap-4 items-center z-50">
         <button 
             onClick={onExit} 
@@ -239,7 +331,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
           <X className="w-6 h-6 group-active:scale-90 transition-transform" />
         </button>
         {settings.smartMode && (
-            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full backdrop-blur-md text-xs font-bold animate-pulse pointer-events-none ${isKid ? 'bg-white/50 border border-sky-200 text-sky-500' : 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-300'}`}>
+            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full backdrop-blur-md text-xs font-bold pointer-events-none ${isKid ? 'bg-white/50 border border-sky-200 text-sky-500' : 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-300'}`}>
                 <Zap className="w-3 h-3 fill-current" />
                 {isKid ? "Smart Helper ON" : "SMART AI ACTIVE"}
             </div>
@@ -255,7 +347,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
           </div>
       )}
 
-      <div className="w-full max-w-4xl text-center px-4 z-10">
+      <div className="w-full max-w-4xl text-center px-4 z-10 pb-40">
         
         {/* Retry Indicator */}
         <div className="h-8 mb-6 flex items-center justify-center">
@@ -287,33 +379,26 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
             </h2>
         </div>
 
-        {/* Input */}
-        <form onSubmit={handleAnswer} className="w-full flex justify-center relative">
+        {/* Input - ReadOnly to prevent virtual keyboard */}
+        <form onSubmit={handleFormSubmit} className="w-full flex justify-center relative">
           <input
-            ref={inputRef}
-            type="number"
+            type="text"
+            readOnly
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            className={`w-full max-w-md bg-transparent border-none text-center text-[5rem] font-bold focus:outline-none py-2 font-mono ${isKid ? 'text-sky-800 placeholder-sky-200' : 'text-white placeholder-white/5 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]'}`}
+            className={`w-full max-w-md bg-transparent border-none text-center text-[5rem] font-bold focus:outline-none py-2 font-mono cursor-default ${isKid ? 'text-sky-800 placeholder-sky-200' : 'text-white placeholder-white/5 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]'}`}
             placeholder={isKid ? "?" : ""}
-            autoFocus
           />
-          {/* Subtle cursor line animation if empty */}
           {!inputValue && !isKid && (
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/20 rounded-full animate-pulse" />
           )}
         </form>
 
-        <div className="mt-20 flex justify-center opacity-80">
+        <div className="mt-8 flex justify-center opacity-80">
              <div className={`px-8 py-3 rounded-full flex items-center gap-4 ${isKid ? 'bg-white shadow-lg border border-sky-100' : 'glass'}`}>
                 {isKid ? <Trophy className="w-6 h-6 text-yellow-500" /> : <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Session Score</span>}
                 <span className={`text-3xl font-bold font-mono ${isKid ? 'text-sky-600' : 'text-indigo-400 drop-shadow-[0_0_10px_rgba(99,102,241,0.5)]'}`}>{score}</span>
              </div>
         </div>
-      </div>
-      
-      <div className={`absolute bottom-8 text-xs font-medium tracking-widest flex items-center gap-2 animate-pulse uppercase z-10 ${isKid ? 'text-sky-400' : 'text-white/20'}`}>
-         {isKid ? "Type & Press Enter" : "Press Enter"} <ArrowRight className="w-3 h-3" />
       </div>
     </div>
   );
