@@ -50,22 +50,23 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
               return {
                   ...prev,
                   kidMode: true,
-                  mode: 'ADDITION',
-                  min: 1, max: 20,
+                  mode: 'MULTIPLICATION', // Default to multiplication as requested context often implies it
+                  min: 1, max: 10,
                   min2: 1, max2: 10,
                   duration: 120,
-                  smartMode: true
+                  smartMode: true,
+                  optionsMode: false
               };
           }
-          return { ...prev, kidMode: false };
+          return { ...prev, kidMode: false, optionsMode: false };
       });
   };
 
   const handleStart = () => {
-    let { min, max, min2, max2, duration, smartMode, mode, kidMode } = localSettings;
+    let { min, max, min2, max2, duration, smartMode, mode, kidMode, optionsMode } = localSettings;
     if (min > max) [min, max] = [max, min];
     if (min2 > max2) [min2, max2] = [max2, min2];
-    const finalSettings = { min, max, min2, max2, duration, smartMode, mode, kidMode };
+    const finalSettings = { min, max, min2, max2, duration, smartMode, mode, kidMode, optionsMode };
     setSettings(finalSettings);
     changeView(AppView.GAME);
   };
@@ -85,6 +86,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
   ];
 
   const isKid = localSettings.kidMode;
+  const showOptionsToggle = isKid && localSettings.mode === 'MULTIPLICATION';
 
   // Material 3 Styles
   const pageBg = isKid ? "bg-[#fef7ff]" : "bg-[#121212]";
@@ -212,7 +214,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                     />
                 </div>
 
-                {/* Toggles */}
+                {/* Smart Mode Toggle */}
                 <div className="flex justify-between items-center py-2">
                     <div className="flex items-center gap-3">
                          <div className={`p-2 rounded-full ${isKid ? 'bg-[#e8def8] text-[#1d1b20]' : 'bg-[#4f378b] text-[#eaddff]'}`}>
@@ -229,6 +231,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                     </label>
                 </div>
 
+                {/* Kid Mode Toggle */}
                 <div className="flex justify-between items-center py-2">
                     <div className="flex items-center gap-3">
                          <div className={`p-2 rounded-full ${isKid ? 'bg-[#e8def8] text-[#1d1b20]' : 'bg-[#4f378b] text-[#eaddff]'}`}>
@@ -244,6 +247,25 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                 </div>
+
+                {/* Multiple Choice Toggle (Conditional) */}
+                {showOptionsToggle && (
+                   <div className="flex justify-between items-center py-2 animate-fade-in">
+                       <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-full ${isKid ? 'bg-[#e8def8] text-[#1d1b20]' : 'bg-[#4f378b] text-[#eaddff]'}`}>
+                               <span className="material-symbol">list_alt</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className={`text-sm font-medium ${isKid ? 'text-[#1d1b20]' : 'text-[#e3e3e3]'}`}>Multiple Choice</span>
+                                <span className="text-xs text-gray-500">Pick from options</span>
+                            </div>
+                       </div>
+                       <label className="relative inline-flex items-center cursor-pointer">
+                           <input type="checkbox" name="optionsMode" checked={!!localSettings.optionsMode} onChange={handleChange} className="sr-only peer" />
+                           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                       </label>
+                   </div>
+                )}
             </div>
             
             {/* FAB / CTA */}

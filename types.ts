@@ -17,6 +17,7 @@ export interface GameSettings {
   duration: number; // in seconds
   smartMode: boolean;
   kidMode: boolean;
+  optionsMode?: boolean; // Enable multiple choice options
 }
 
 export interface Question {

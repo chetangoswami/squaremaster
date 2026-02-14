@@ -20,12 +20,14 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [options, setOptions] = useState<number[]>([]);
   
   const questionStartTimeRef = useRef<number>(Date.now());
   const weightsRef = useRef<Record<number, number>>({});
   const retryQueueRef = useRef<Question[]>([]);
   const questionsSinceRetryRef = useRef(0);
   const isKid = settings.kidMode;
+  const isOptionsMode = settings.kidMode && settings.optionsMode && settings.mode === 'MULTIPLICATION';
 
   useEffect(() => {
     const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -81,6 +83,32 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     return candidates[candidates.length - 1]?.val || min;
   };
 
+  const generateOptions = (answer: number) => {
+      const opts = new Set<number>();
+      opts.add(answer);
+      
+      let safetyCounter = 0;
+      while (opts.size < 4 && safetyCounter < 50) {
+          safetyCounter++;
+          const offset = Math.floor(Math.random() * 8) + 1; // 1-8 deviation
+          const sign = Math.random() > 0.5 ? 1 : -1;
+          const val = answer + (offset * sign);
+          
+          if (val > 0 && val !== answer) {
+              opts.add(val);
+          }
+      }
+      
+      // Fallback if loop failed to find unique positive numbers
+      if (opts.size < 4) {
+          if (answer > 10) opts.add(answer - 10);
+          opts.add(answer + 10);
+          opts.add(answer + 1);
+      }
+      
+      return Array.from(opts).slice(0, 4).sort(() => Math.random() - 0.5);
+  };
+
   const generateQuestion = useCallback(() => {
     if (settings.smartMode && retryQueueRef.current.length > 0) {
         if (questionsSinceRetryRef.current >= 2 || retryQueueRef.current.length > 3) {
@@ -99,33 +127,44 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         return Math.floor(Math.random() * (max - min + 1)) + min;
     };
 
+    let q: Question;
     switch (settings.mode) {
         case 'SQUARES':
             val1 = getRandom(settings.min, settings.max);
-            return { mode: 'SQUARES', val1, answer: val1 * val1, isRetry: false } as Question;
+            q = { mode: 'SQUARES', val1, answer: val1 * val1, isRetry: false } as Question;
+            break;
         case 'ADDITION':
             val1 = getRandom(settings.min, settings.max);
             val2 = getRandom(settings.min2, settings.max2);
-            return { mode: 'ADDITION', val1, val2, answer: val1 + val2, isRetry: false } as Question;
+            q = { mode: 'ADDITION', val1, val2, answer: val1 + val2, isRetry: false } as Question;
+            break;
         case 'SUBTRACTION':
             val1 = getRandom(settings.min, settings.max);
             val2 = getRandom(settings.min2, settings.max2);
             if (settings.kidMode && val2 > val1) [val1, val2] = [val2, val1];
-            return { mode: 'SUBTRACTION', val1, val2, answer: val1 - val2, isRetry: false } as Question;
+            q = { mode: 'SUBTRACTION', val1, val2, answer: val1 - val2, isRetry: false } as Question;
+            break;
         case 'MULTIPLICATION':
             val1 = getRandom(settings.min, settings.max);
             val2 = getRandom(settings.min2, settings.max2);
-            return { mode: 'MULTIPLICATION', val1, val2, answer: val1 * val2, isRetry: false } as Question;
+            q = { mode: 'MULTIPLICATION', val1, val2, answer: val1 * val2, isRetry: false } as Question;
+            break;
         case 'DIVISION':
             val2 = getRandom(settings.min2, settings.max2);
             answer = getRandom(settings.min, settings.max);
             val1 = val2 * answer;
-            return { mode: 'DIVISION', val1, val2, answer, isRetry: false } as Question;
-        default: return { mode: 'SQUARES', val1: 2, answer: 4 } as Question;
+            q = { mode: 'DIVISION', val1, val2, answer, isRetry: false } as Question;
+            break;
+        default: q = { mode: 'SQUARES', val1: 2, answer: 4 } as Question;
     }
+    return q;
   }, [settings]);
 
-  useEffect(() => { setCurrentQuestion(generateQuestion()); }, []); 
+  useEffect(() => { 
+      const q = generateQuestion();
+      setCurrentQuestion(q);
+      if (isOptionsMode) setOptions(generateOptions(q.answer));
+  }, []); 
 
   const handleStartGame = () => {
     setIsPlaying(true);
@@ -145,11 +184,17 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     onFinish({ totalQuestions: history.length, correct: correctCount, score, history, startTime, endTime: Date.now(), problematicKeys: [] });
   };
 
-  const processAnswer = useCallback(() => {
+  const processAnswer = useCallback((overrideValue?: number) => {
     if (!currentQuestion || !isPlaying) return;
-    const cleanInput = inputValue.replace('−', '-');
-    const userVal = parseInt(cleanInput);
-    if (inputValue.trim() === '') return;
+    
+    let userVal: number;
+    if (overrideValue !== undefined) {
+        userVal = overrideValue;
+    } else {
+        const cleanInput = inputValue.replace('−', '-');
+        userVal = parseInt(cleanInput);
+        if (inputValue.trim() === '') return;
+    }
 
     const isCorrect = userVal === currentQuestion.answer;
     const timeTaken = Date.now() - questionStartTimeRef.current;
@@ -174,12 +219,15 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         nextQ = generateQuestion(); attempts++;
     }
     setCurrentQuestion(nextQ);
+    if (isOptionsMode) setOptions(generateOptions(nextQ.answer));
     questionStartTimeRef.current = Date.now();
-  }, [currentQuestion, inputValue, generateQuestion, settings.smartMode, isPlaying]);
+  }, [currentQuestion, inputValue, generateQuestion, settings.smartMode, isPlaying, isOptionsMode]);
 
   const handleFormSubmit = (e: React.FormEvent) => { e.preventDefault(); processAnswer(); };
 
   useEffect(() => {
+    if (isOptionsMode) return; // Disable keyboard typing in options mode for clarity, or let it work? Let's disable to focus on clicks.
+    
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') { onExit(); return; }
         if (!isPlaying) return;
@@ -190,7 +238,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [processAnswer, onExit, isPlaying]);
+  }, [processAnswer, onExit, isPlaying, isOptionsMode]);
 
   const handleNumpadInput = (d: string) => { if(isPlaying) setInputValue(p => p.length > 6 ? p : p + d); };
   const handleNumpadDelete = () => { if(isPlaying) setInputValue(p => p.slice(0, -1)); };
@@ -213,23 +261,28 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   return (
     <div className={`flex flex-col min-h-screen relative overflow-hidden transition-colors duration-300 ${bgClass} ${textClass}`}>
       
-      <DraggableNumpad 
-          onInput={handleNumpadInput}
-          onDelete={handleNumpadDelete}
-          onEnter={processAnswer}
-          isKid={isKid}
-      />
+      {/* Conditionally render Numpad only if NOT in Options Mode */}
+      {!isOptionsMode && (
+          <DraggableNumpad 
+              onInput={handleNumpadInput}
+              onDelete={handleNumpadDelete}
+              onEnter={() => processAnswer()}
+              isKid={isKid}
+          />
+      )}
 
       {/* Start Overlay */}
       {!isPlaying && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
               <div className={`p-8 rounded-[32px] max-w-sm w-full text-center shadow-2xl ${isKid ? 'bg-[#f3edf7]' : 'bg-[#1e1e1e] border border-white/10'}`}>
                   <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${isKid ? 'bg-indigo-100 text-indigo-700' : 'bg-[#4f378b] text-[#eaddff]'}`}>
-                      <span className="material-symbol text-3xl">drag_pan</span>
+                      <span className="material-symbol text-3xl">{isOptionsMode ? 'touch_app' : 'drag_pan'}</span>
                   </div>
-                  <h2 className={`text-2xl font-bold mb-2 ${isKid ? 'text-[#1d1b20]' : 'text-white'}`}>Position the Numpad</h2>
+                  <h2 className={`text-2xl font-bold mb-2 ${isKid ? 'text-[#1d1b20]' : 'text-white'}`}>
+                      {isOptionsMode ? 'Ready?' : 'Position the Numpad'}
+                  </h2>
                   <p className={`mb-8 text-sm ${isKid ? 'text-[#49454f]' : 'text-[#c4c7c5]'}`}>
-                      Drag the keypad to a comfortable spot before you begin.
+                      {isOptionsMode ? 'Select the correct answer from the options.' : 'Drag the keypad to a comfortable spot before you begin.'}
                   </p>
                   <button
                       onClick={handleStartGame}
@@ -294,18 +347,36 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
             </h2>
         </div>
 
-        {/* Answer Input */}
-        <form onSubmit={handleFormSubmit} className="w-full flex justify-center">
-            <div className={`relative min-w-[200px] border-b-4 ${isKid ? 'border-indigo-200' : 'border-gray-700'}`}>
-                <input
-                    type="text"
-                    readOnly
-                    value={inputValue}
-                    className="w-full bg-transparent text-center text-[4rem] font-medium focus:outline-none py-2 font-mono"
-                    placeholder="?"
-                />
+        {/* Answer Area: Either Text Input or Multiple Choice Buttons */}
+        {isOptionsMode ? (
+            <div className="w-full max-w-lg grid grid-cols-2 gap-4 animate-fade-in">
+                {options.map((opt, idx) => (
+                    <button
+                        key={idx}
+                        onClick={() => processAnswer(opt)}
+                        className={`h-24 rounded-2xl text-4xl font-bold transition-transform active:scale-95 shadow-sm ${
+                            isKid 
+                            ? 'bg-white text-indigo-900 border-2 border-indigo-100 hover:border-indigo-300' 
+                            : 'bg-[#1e1e1e] text-[#e3e3e3] border border-white/10 hover:bg-[#2d2f31]'
+                        }`}
+                    >
+                        {opt}
+                    </button>
+                ))}
             </div>
-        </form>
+        ) : (
+            <form onSubmit={handleFormSubmit} className="w-full flex justify-center">
+                <div className={`relative min-w-[200px] border-b-4 ${isKid ? 'border-indigo-200' : 'border-gray-700'}`}>
+                    <input
+                        type="text"
+                        readOnly
+                        value={inputValue}
+                        className="w-full bg-transparent text-center text-[4rem] font-medium focus:outline-none py-2 font-mono"
+                        placeholder="?"
+                    />
+                </div>
+            </form>
+        )}
         
         {/* Smart Mode Indicator */}
         {settings.smartMode && (
