@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView, GameSettings, GameMode } from '../types';
 import { clearWeights } from '../services/storageService';
 
@@ -11,6 +11,25 @@ interface HomeProps {
 const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
   const [localSettings, setLocalSettings] = useState<GameSettings>(settings);
   const [cleared, setCleared] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.log("Error enabling fullscreen:", err);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -76,8 +95,17 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
   const inputFill = isKid ? "bg-[#ffffff] border-b border-[#6750a4]" : "bg-[#2d2f31] border-b border-[#938f99] text-white";
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 ${pageBg}`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 relative ${pageBg}`}>
       
+      {/* Full Screen Toggle */}
+      <button 
+        onClick={toggleFullScreen}
+        className={`absolute top-4 right-4 w-12 h-12 rounded-full flex items-center justify-center transition-colors z-10 ${isKid ? 'bg-white text-[#1d1b20] hover:bg-gray-50 shadow-sm' : 'bg-[#2d2f31] text-[#e3e3e3] hover:bg-[#3d3f41]'}`}
+        title="Toggle Full Screen"
+      >
+        <span className="material-symbol">{isFullscreen ? 'close_fullscreen' : 'fullscreen'}</span>
+      </button>
+
       <div className="w-full max-w-md space-y-6">
         
         {/* Header */}

@@ -19,12 +19,31 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const [flash, setFlash] = useState<'none' | 'green' | 'red'>('none');
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const questionStartTimeRef = useRef<number>(Date.now());
   const weightsRef = useRef<Record<number, number>>({});
   const retryQueueRef = useRef<Question[]>([]);
   const questionsSinceRetryRef = useRef(0);
   const isKid = settings.kidMode;
+
+  useEffect(() => {
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.log("Error enabling fullscreen:", err);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
 
   useEffect(() => {
     if (settings.smartMode) {
@@ -225,9 +244,14 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
 
       {/* Header */}
       <div className="flex justify-between items-center p-6 z-20">
-          <button onClick={onExit} className={`w-12 h-12 rounded-full flex items-center justify-center ${isKid ? 'bg-white hover:bg-gray-100' : 'bg-[#2d2f31] hover:bg-[#3d3f41]'} transition-colors`}>
-              <span className="material-symbol">close</span>
-          </button>
+          <div className="flex gap-3">
+            <button onClick={onExit} className={`w-12 h-12 rounded-full flex items-center justify-center ${isKid ? 'bg-white hover:bg-gray-100' : 'bg-[#2d2f31] hover:bg-[#3d3f41]'} transition-colors`}>
+                <span className="material-symbol">close</span>
+            </button>
+            <button onClick={toggleFullScreen} className={`w-12 h-12 rounded-full flex items-center justify-center ${isKid ? 'bg-white hover:bg-gray-100' : 'bg-[#2d2f31] hover:bg-[#3d3f41]'} transition-colors`}>
+                <span className="material-symbol">{isFullscreen ? 'close_fullscreen' : 'fullscreen'}</span>
+            </button>
+          </div>
           
           <div className={`px-5 py-2 rounded-full flex items-center gap-2 ${isKid ? 'bg-indigo-50 text-indigo-900' : 'bg-[#333537] text-white'}`}>
               <span className="material-symbol text-sm">trophy</span>
