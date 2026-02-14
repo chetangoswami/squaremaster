@@ -28,7 +28,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   const retryQueueRef = useRef<Question[]>([]);
   const questionsSinceRetryRef = useRef(0);
   const isKid = settings.kidMode;
-  const isOptionsMode = settings.kidMode && settings.optionsMode && settings.mode === 'MULTIPLICATION';
+  const isOptionsMode = settings.kidMode && settings.optionsMode;
 
   useEffect(() => {
     const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -84,27 +84,62 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
     return candidates[candidates.length - 1]?.val || min;
   };
 
-  const generateOptions = (answer: number) => {
+  // Improved Smart Options Generation
+  const generateOptions = (q: Question) => {
+      const { answer, mode, val1, val2 } = q;
       const opts = new Set<number>();
       opts.add(answer);
-      
+
+      const add = (n: number) => {
+          if (n > 0 && n !== answer && Number.isInteger(n)) opts.add(n);
+      };
+
+      if (mode === 'SQUARES') {
+          // Common square mistakes
+          add((val1 - 1) ** 2);
+          add((val1 + 1) ** 2);
+          // Transposition of digits (e.g. 13^2 = 169 vs 196)
+          const s = answer.toString();
+          if (s.length > 1) {
+              const rev = parseInt(s.split('').reverse().join(''));
+              if (rev !== answer) add(rev);
+          }
+          add(answer + 10);
+          add(answer - 10);
+      } else if (mode === 'MULTIPLICATION' && val2 !== undefined) {
+          // Off by one operand group
+          add(val1 * (val2 + 1));
+          add(val1 * (val2 - 1));
+          add((val1 + 1) * val2);
+          add((val1 - 1) * val2);
+      } else if (mode === 'ADDITION' || mode === 'SUBTRACTION') {
+          // Off by small amounts
+          add(answer + 1);
+          add(answer - 1);
+          add(answer + 2);
+          add(answer - 2);
+          add(answer + 10);
+          add(answer - 10);
+      } else if (mode === 'DIVISION') {
+          add(answer + 1);
+          add(answer - 1);
+          add(answer + 2);
+          add(answer * 2);
+      }
+
+      // Fallback: Random offset logic if we don't have enough options yet
       let safetyCounter = 0;
       while (opts.size < 4 && safetyCounter < 50) {
           safetyCounter++;
-          const offset = Math.floor(Math.random() * 8) + 1; // 1-8 deviation
+          const offset = Math.floor(Math.random() * 5) + 1; // 1-5 deviation
           const sign = Math.random() > 0.5 ? 1 : -1;
           const val = answer + (offset * sign);
-          
-          if (val > 0 && val !== answer) {
-              opts.add(val);
-          }
+          add(val);
       }
       
-      // Fallback if loop failed to find unique positive numbers
-      if (opts.size < 4) {
-          if (answer > 10) opts.add(answer - 10);
-          opts.add(answer + 10);
-          opts.add(answer + 1);
+      // Last Resort: Just increment
+      while (opts.size < 4) {
+          add(answer + opts.size + 1);
       }
       
       return Array.from(opts).slice(0, 4).sort(() => Math.random() - 0.5);
@@ -164,7 +199,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   useEffect(() => { 
       const q = generateQuestion();
       setCurrentQuestion(q);
-      if (isOptionsMode) setOptions(generateOptions(q.answer));
+      if (isOptionsMode) setOptions(generateOptions(q));
   }, []); 
 
   const handleStartGame = () => {
@@ -225,7 +260,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         nextQ = generateQuestion(); attempts++;
     }
     setCurrentQuestion(nextQ);
-    if (isOptionsMode) setOptions(generateOptions(nextQ.answer));
+    if (isOptionsMode) setOptions(generateOptions(nextQ));
     questionStartTimeRef.current = Date.now();
   }, [currentQuestion, inputValue, generateQuestion, settings.smartMode, isPlaying, isOptionsMode]);
 

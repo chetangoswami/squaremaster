@@ -50,7 +50,7 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
               return {
                   ...prev,
                   kidMode: true,
-                  mode: 'MULTIPLICATION', // Default to multiplication as requested context often implies it
+                  mode: 'MULTIPLICATION', // Default entry point for kids
                   min: 1, max: 10,
                   min2: 1, max2: 10,
                   duration: 120,
@@ -86,7 +86,8 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
   ];
 
   const isKid = localSettings.kidMode;
-  const showOptionsToggle = isKid && localSettings.mode === 'MULTIPLICATION';
+  // Options toggle is now available for all modes when in Kid Mode
+  const showOptionsToggle = isKid;
 
   // Material 3 Styles
   const pageBg = isKid ? "bg-[#fef7ff]" : "bg-[#121212]";
