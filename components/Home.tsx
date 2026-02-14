@@ -238,13 +238,21 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
                 Study
             </button>
             <button
-                onClick={handleClearProgress}
-                className={`flex-1 h-12 rounded-full text-sm font-medium flex items-center justify-center gap-2 transition-colors ${isKid ? 'bg-red-100 text-red-900' : 'bg-[#410e0b] text-[#f2b8b5]'}`}
+                onClick={() => changeView(AppView.STATS)}
+                className={`flex-1 h-12 rounded-full text-sm font-medium flex items-center justify-center gap-2 transition-colors ${secondaryFill}`}
             >
-                <span className="material-symbol text-lg">{cleared ? 'check' : 'delete'}</span>
-                {cleared ? 'Reset!' : 'Reset Data'}
+                <span className="material-symbol text-lg">monitoring</span>
+                Stats
             </button>
         </div>
+        
+        <button
+            onClick={handleClearProgress}
+            className={`w-full mt-2 h-10 rounded-full text-xs font-medium flex items-center justify-center gap-2 transition-colors opacity-50 hover:opacity-100 ${isKid ? 'text-red-900' : 'text-[#f2b8b5]'}`}
+        >
+            <span className="material-symbol text-sm">{cleared ? 'check' : 'delete'}</span>
+            {cleared ? 'Reset!' : 'Clear Data'}
+        </button>
 
       </div>
     </div>

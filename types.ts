@@ -2,7 +2,8 @@ export enum AppView {
   HOME = 'HOME',
   GAME = 'GAME',
   RESULTS = 'RESULTS',
-  STUDY = 'STUDY'
+  STUDY = 'STUDY',
+  STATS = 'STATS'
 }
 
 export type GameMode = 'SQUARES' | 'MULTIPLICATION' | 'ADDITION' | 'SUBTRACTION' | 'DIVISION';

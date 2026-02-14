@@ -4,6 +4,8 @@ import Home from './components/Home';
 import Game from './components/Game';
 import Results from './components/Results';
 import Study from './components/Study';
+import Stats from './components/Stats';
+import { incrementGamesPlayed } from './services/storageService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
@@ -22,6 +24,7 @@ const App: React.FC = () => {
   const [lastStats, setLastStats] = useState<GameStats | null>(null);
 
   const handleGameFinish = (stats: GameStats) => {
+    incrementGamesPlayed();
     setLastStats(stats);
     setCurrentView(AppView.RESULTS);
   };
@@ -61,6 +64,13 @@ const App: React.FC = () => {
             settings={settings}
             onBack={() => setCurrentView(AppView.HOME)}
           />
+        );
+      case AppView.STATS:
+        return (
+            <Stats 
+                settings={settings}
+                onBack={() => setCurrentView(AppView.HOME)}
+            />
         );
       default:
         return <Home settings={settings} setSettings={setSettings} changeView={setCurrentView} />;
