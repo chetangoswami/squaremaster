@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { GameSettings, GameMode, SessionRecord } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { GameSettings, GameMode, SessionRecord, AnswerRecord } from '../types';
 import { loadWeights, getTotalGamesPlayed, loadSessions } from '../services/storageService';
 
 interface StatsProps {
@@ -9,16 +9,16 @@ interface StatsProps {
 }
 
 const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
-  const [activeMode, setActiveMode] = useState<GameMode>('SQUARES');
+  const [activeMode, setActiveMode] = useState<GameMode>('MULTIPLICATION'); // Default to Multiply as per user focus
   const [weights, setWeights] = useState<Record<number, number>>({});
   const [totalGames, setTotalGames] = useState(0);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [selectedOperand, setSelectedOperand] = useState<number | null>(null);
 
   const isKid = settings.kidMode;
 
   useEffect(() => {
     setTotalGames(getTotalGamesPlayed(isKid));
-    // Load and filter sessions for the current profile (Kid vs Pro)
     const allSessions = loadSessions();
     setSessions(allSessions.filter(s => s.isKid === isKid));
   }, [isKid]);
@@ -27,23 +27,20 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
     setWeights(loadWeights(activeMode, isKid));
   }, [activeMode, isKid]);
 
-  // Determine grid range based on mode heuristics or data
+  // Determine grid range
   const getRange = () => {
-      if (activeMode === 'SQUARES') return Array.from({length: 30}, (_, i) => i + 1); // 1-30
-      if (activeMode === 'MULTIPLICATION') return Array.from({length: 20}, (_, i) => i + 1); // 1-20 tables
-      return Array.from({length: 20}, (_, i) => i + 1); // Default
+      if (activeMode === 'SQUARES') return Array.from({length: 30}, (_, i) => i + 1);
+      if (activeMode === 'MULTIPLICATION') return Array.from({length: 20}, (_, i) => i + 1);
+      return Array.from({length: 20}, (_, i) => i + 1);
   };
 
   const getMasteryColor = (val: number) => {
       const w = weights[val];
-      if (w === undefined) return isKid ? 'bg-gray-100 text-gray-400' : 'bg-[#2d2f31] text-gray-500'; // Unknown
-      
-      // Weight logic: < 0.8 = Mastered (Green), > 1.2 = Needs Work (Red), else Neutral
-      // Higher weight means it appeared more often or was answered incorrectly
+      if (w === undefined) return isKid ? 'bg-gray-100 text-gray-400' : 'bg-[#2d2f31] text-gray-500';
       if (w <= 0.8) return isKid ? 'bg-green-200 text-green-800' : 'bg-[#0f291e] text-[#6dd58c] border border-[#6dd58c]/30';
       if (w >= 1.5) return isKid ? 'bg-red-200 text-red-800' : 'bg-[#3c1414] text-[#f2b8b5] border border-[#f2b8b5]/30';
       if (w > 1.0) return isKid ? 'bg-orange-100 text-orange-800' : 'bg-[#2a2012] text-[#ffb4ab] border border-[#ffb4ab]/30';
-      return isKid ? 'bg-blue-50 text-blue-800' : 'bg-[#1e2b3b] text-[#a8c7fa]'; // In progress
+      return isKid ? 'bg-blue-50 text-blue-800' : 'bg-[#1e2b3b] text-[#a8c7fa]';
   };
 
   const getModeIcon = (mode: GameMode) => {
@@ -69,36 +66,94 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
   };
 
   const getExpectedScore = (session: SessionRecord) => {
-      if (!session.duration) return null; // Legacy data might not have duration
-      
+      if (!session.duration) return null;
       const minutes = session.duration / 60;
-      let rate = 20; // Base Questions Per Minute
-
+      let rate = 20;
       if (session.isKid) {
           switch (session.mode) {
-              case 'ADDITION':
-              case 'SUBTRACTION': rate = 15; break; 
-              case 'MULTIPLICATION':
-              case 'DIVISION': rate = 10; break; 
-              case 'SQUARES': rate = 10; break; 
+              case 'ADDITION': case 'SUBTRACTION': rate = 15; break; 
               default: rate = 10;
           }
       } else {
-          // Pro Mode rates
           switch (session.mode) {
-              case 'SQUARES': rate = 30; break; // Fast recall
-              case 'ADDITION':
-              case 'SUBTRACTION': rate = 25; break; 
+              case 'SQUARES': rate = 30; break;
+              case 'ADDITION': case 'SUBTRACTION': rate = 25; break; 
               case 'MULTIPLICATION': rate = 20; break; 
               case 'DIVISION': rate = 15; break; 
           }
       }
-
-      // Multiple Choice is generally faster for recognition
       if (session.optionsMode) rate *= 1.25;
-
       return Math.round(rate * minutes);
   };
+
+  // Detailed Stats Calculation
+  const breakdown = useMemo(() => {
+    if (selectedOperand === null) return null;
+
+    // Filter relevant answers from all sessions
+    const relevantAnswers: AnswerRecord[] = [];
+    sessions.forEach(s => {
+        if (s.mode === activeMode && s.history) {
+            s.history.forEach(a => {
+                if (activeMode === 'SQUARES') {
+                    if (a.question.val1 === selectedOperand) relevantAnswers.push(a);
+                } else {
+                    if (a.question.val1 === selectedOperand || a.question.val2 === selectedOperand) {
+                        relevantAnswers.push(a);
+                    }
+                }
+            });
+        }
+    });
+
+    if (activeMode === 'SQUARES') {
+        // For squares, we just summarize the single fact
+        const total = relevantAnswers.length;
+        const correct = relevantAnswers.filter(a => a.isCorrect).length;
+        const avgTime = total ? relevantAnswers.reduce((sum, a) => sum + a.timeTaken, 0) / total : 0;
+        const recent = relevantAnswers.slice(-5).reverse(); // Last 5
+        return { type: 'SINGLE', total, correct, avgTime, recent };
+    }
+
+    // For operations, group by counterpart
+    const statsByCounterpart: Record<number, { 
+        total: number, 
+        correct: number, 
+        timeSum: number, 
+        slowCount: number,
+        lastResult: AnswerRecord
+    }> = {};
+
+    relevantAnswers.forEach(a => {
+        // Identify counterpart
+        let cp = a.question.val1 === selectedOperand ? a.question.val2 : a.question.val1;
+        if (cp === undefined) return;
+
+        if (!statsByCounterpart[cp]) {
+            statsByCounterpart[cp] = { total: 0, correct: 0, timeSum: 0, slowCount: 0, lastResult: a };
+        }
+        
+        const entry = statsByCounterpart[cp];
+        entry.total++;
+        if (a.isCorrect) entry.correct++;
+        entry.timeSum += a.timeTaken;
+        if (a.timeTaken > 5000) entry.slowCount++; // > 5s is slow
+        // Keep track of the most recent attempt (sessions are roughly sorted by date, but logic might vary, assumption here is sequential processing or we check timestamp if needed. Since sessions are loaded newest first usually? No, check loadSessions. It does unshift so index 0 is newest. But here we iterate. Let's assume order.)
+        // Actually, simple iteration overwrites, so the last one processed is the "last" in the array. 
+        // loadSessions() -> [newest, ..., oldest].
+        // We iterated sessions array which is [newest...]. So the first one we find is actually the LATEST.
+        // But `relevantAnswers` collects them. 
+        // Let's refine: We want the NEWEST result.
+        // We will process the array and if we already have a result, we might keep it if we process newest first.
+        // sessions are [newest, ...].
+        // So first encounter is the latest.
+        if (statsByCounterpart[cp].total === 1) { 
+             entry.lastResult = a; // Initialize with the first found (newest)
+        }
+    });
+    
+    return { type: 'TABLE', stats: statsByCounterpart };
+  }, [selectedOperand, sessions, activeMode]);
 
   const modes: { id: GameMode; label: string }[] = [
       { id: 'SQUARES', label: 'Squares' },
@@ -107,12 +162,13 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
       { id: 'SUBTRACTION', label: 'Subtract' },
   ];
 
-  // Theme Constants
+  // Colors
   const pageBg = isKid ? "bg-[#fef7ff]" : "bg-[#121212]";
   const textMain = isKid ? "text-[#1d1b20]" : "text-[#e3e3e3]";
   const textSub = isKid ? "text-[#49454f]" : "text-[#c4c7c5]";
   const surface = isKid ? "bg-[#f3edf7]" : "bg-[#1e1e1e]";
   const surfaceContainer = isKid ? "bg-white" : "bg-[#2d2f31]";
+  const modalBg = isKid ? "bg-white" : "bg-[#2d2f31]";
 
   return (
     <div className={`min-h-screen flex flex-col ${pageBg} ${textMain}`}>
@@ -153,8 +209,7 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-bold">Proficiency Heatmap</h2>
                     <div className="flex gap-2">
-                        {/* Legend */}
-                        <div className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-wide opacity-60">
+                         <div className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-wide opacity-60">
                             <div className={`w-3 h-3 rounded-full ${isKid ? 'bg-green-400' : 'bg-[#6dd58c]'}`}></div>
                             <span>Strong</span>
                         </div>
@@ -165,12 +220,11 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
                     </div>
                 </div>
 
-                {/* Mode Selector Chips */}
                 <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
                     {modes.map(m => (
                         <button
                             key={m.id}
-                            onClick={() => setActiveMode(m.id)}
+                            onClick={() => { setActiveMode(m.id); setSelectedOperand(null); }}
                             className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                                 activeMode === m.id 
                                 ? (isKid ? 'bg-[#6750a4] text-white' : 'bg-[#d0bcff] text-[#381e72]')
@@ -182,20 +236,19 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
                     ))}
                 </div>
 
-                {/* The Grid */}
                 <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-3 mt-4">
                     {getRange().map(num => (
-                        <div 
+                        <button
                             key={num} 
-                            className={`aspect-square rounded-2xl flex items-center justify-center text-lg font-bold transition-transform hover:scale-105 ${getMasteryColor(num)}`}
+                            onClick={() => setSelectedOperand(num)}
+                            className={`aspect-square rounded-2xl flex items-center justify-center text-lg font-bold transition-transform hover:scale-105 active:scale-95 ${getMasteryColor(num)}`}
                         >
                             {num}
-                        </div>
+                        </button>
                     ))}
                 </div>
-                
                 <p className={`text-xs text-center mt-6 ${textSub}`}>
-                    * Numbers show base operands (e.g., "12" represents 12², 12×N, etc.)
+                    Tap a number to see detailed breakdown for that table.
                 </p>
             </div>
 
@@ -204,7 +257,7 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
                 <h2 className="text-lg font-bold mb-4">Recent Sessions</h2>
                 <div className="space-y-3">
                     {sessions.length === 0 && (
-                        <p className={`text-sm opacity-50 text-center py-4 ${textSub}`}>No games played yet. Start a session!</p>
+                        <p className={`text-sm opacity-50 text-center py-4 ${textSub}`}>No games played yet.</p>
                     )}
                     {sessions.map((session) => {
                         const expected = getExpectedScore(session);
@@ -222,27 +275,19 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
                                         <div className="font-bold text-sm flex items-center gap-2">
                                             {getModeLabel(session.mode)}
                                             {session.optionsMode && (
-                                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${isKid ? 'border-indigo-200 text-indigo-700' : 'border-gray-600 text-gray-400'}`}>
-                                                    MCQ
-                                                </span>
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${isKid ? 'border-indigo-200 text-indigo-700' : 'border-gray-600 text-gray-400'}`}>MCQ</span>
                                             )}
                                         </div>
                                         <div className={`text-xs ${textSub}`}>
-                                            {new Date(session.timestamp).toLocaleDateString()} • {session.duration ? `${session.duration}s` : ''}
+                                            {new Date(session.timestamp).toLocaleDateString()}
                                         </div>
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="flex flex-col items-end">
-                                        <div className={`font-mono font-bold text-xl ${session.correct === session.total ? (isKid ? 'text-green-600' : 'text-green-400') : ''}`}>
-                                            {session.score} <span className="text-xs font-normal opacity-50">/ {session.total}</span>
-                                        </div>
-                                        {expected !== null && (
-                                            <div className="text-[10px] font-medium opacity-60">
-                                                Exp: {expected}
-                                            </div>
-                                        )}
+                                    <div className={`font-mono font-bold text-xl ${session.correct === session.total ? 'text-green-500' : ''}`}>
+                                        {session.score} <span className="text-xs font-normal opacity-50">/ {session.total}</span>
                                     </div>
+                                    {expected && <div className="text-[10px] opacity-60">Exp: {expected}</div>}
                                 </div>
                             </div>
                         );
@@ -250,6 +295,142 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
                 </div>
             </div>
         </div>
+
+        {/* Breakdown Modal */}
+        {selectedOperand !== null && breakdown && (
+            <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-fade-in" onClick={() => setSelectedOperand(null)}>
+                <div className={`w-full md:max-w-md max-h-[85vh] flex flex-col rounded-t-[32px] md:rounded-[32px] overflow-hidden shadow-2xl animate-slide-up ${modalBg} ${textMain}`} onClick={e => e.stopPropagation()}>
+                    
+                    {/* Modal Header */}
+                    <div className={`p-6 pb-4 flex items-center justify-between ${surface}`}>
+                        <div>
+                            <div className={`text-xs font-bold uppercase tracking-wider opacity-60`}>Detailed Analysis</div>
+                            <h2 className="text-2xl font-bold">
+                                {activeMode === 'SQUARES' ? `${selectedOperand}²` : `Table of ${selectedOperand}`}
+                            </h2>
+                        </div>
+                        <button onClick={() => setSelectedOperand(null)} className="w-10 h-10 rounded-full flex items-center justify-center bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20">
+                            <span className="material-symbol">close</span>
+                        </button>
+                    </div>
+
+                    {/* Modal Content */}
+                    <div className="overflow-y-auto p-4 space-y-2">
+                        {breakdown.type === 'SINGLE' && (
+                           <div className="space-y-4 text-center p-8">
+                               <div className="text-6xl font-bold">{selectedOperand! * selectedOperand!}</div>
+                               <div className="grid grid-cols-2 gap-4 mt-8">
+                                   <div className={`p-4 rounded-2xl ${surface}`}>
+                                       <div className="text-xs opacity-60 uppercase">Accuracy</div>
+                                       <div className="text-2xl font-bold">
+                                        {breakdown.total ? Math.round((breakdown.correct / breakdown.total) * 100) : 0}%
+                                       </div>
+                                   </div>
+                                   <div className={`p-4 rounded-2xl ${surface}`}>
+                                       <div className="text-xs opacity-60 uppercase">Avg Time</div>
+                                       <div className="text-2xl font-bold">
+                                        {(breakdown.avgTime / 1000).toFixed(1)}s
+                                       </div>
+                                   </div>
+                               </div>
+                               <div className="text-left mt-6">
+                                   <h3 className="text-sm font-bold opacity-60 mb-2">Recent Attempts</h3>
+                                   <div className="flex gap-2">
+                                       {breakdown.recent.map((r, i) => (
+                                           <div key={i} className={`flex-1 h-2 rounded-full ${r.isCorrect ? (r.timeTaken < 3000 ? 'bg-green-500' : 'bg-yellow-500') : 'bg-red-500'}`} />
+                                       ))}
+                                   </div>
+                               </div>
+                           </div> 
+                        )}
+
+                        {breakdown.type === 'TABLE' && (
+                            <>
+                                {Array.from({length: 12}, (_, i) => i + 1).map(k => {
+                                    const stat = breakdown.stats[k];
+                                    const hasData = !!stat;
+                                    const accuracy = hasData ? Math.round((stat.correct / stat.total) * 100) : 0;
+                                    const avgTime = hasData ? stat.timeSum / stat.total : 0;
+                                    const isSlow = avgTime > 4000;
+                                    const opChar = activeMode === 'MULTIPLICATION' ? '×' : activeMode === 'ADDITION' ? '+' : activeMode === 'SUBTRACTION' ? '−' : '÷';
+
+                                    let statusColor = isKid ? "text-gray-400" : "text-gray-600";
+                                    let statusText = "Unseen";
+                                    let rowBg = "bg-transparent";
+
+                                    if (hasData) {
+                                        if (accuracy < 80) {
+                                            statusColor = "text-red-500";
+                                            statusText = "Struggling";
+                                            rowBg = isKid ? "bg-red-50" : "bg-red-900/10";
+                                        } else if (isSlow) {
+                                            statusColor = "text-yellow-500";
+                                            statusText = "Slow";
+                                            rowBg = isKid ? "bg-yellow-50" : "bg-yellow-900/10";
+                                        } else {
+                                            statusColor = "text-green-500";
+                                            statusText = "Mastered";
+                                            rowBg = isKid ? "bg-green-50" : "bg-green-900/10";
+                                        }
+                                        
+                                        // Override if last attempt was wrong
+                                        if (!stat.lastResult.isCorrect) {
+                                            statusText = "Last: Wrong";
+                                            statusColor = "text-red-500";
+                                        }
+                                    }
+
+                                    return (
+                                        <div key={k} className={`flex items-center justify-between p-4 rounded-xl ${rowBg}`}>
+                                            <div className="flex items-center gap-4">
+                                                <div className={`text-xl font-mono font-bold w-24`}>
+                                                    {selectedOperand} {opChar} {k}
+                                                </div>
+                                            </div>
+                                            
+                                            {hasData ? (
+                                                <div className="text-right">
+                                                    <div className={`text-xs font-bold uppercase tracking-wider mb-0.5 ${statusColor}`}>
+                                                        {statusText}
+                                                    </div>
+                                                    <div className="text-sm font-medium opacity-80">
+                                                        {(avgTime/1000).toFixed(1)}s avg • {accuracy}%
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-sm opacity-30 italic">Not practiced</div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                                {/* Show extra practiced numbers if they exist (outside 1-12) */}
+                                {Object.keys(breakdown.stats).map(kStr => parseInt(kStr)).filter(k => k > 12).sort((a,b)=>a-b).map(k => {
+                                     const stat = breakdown.stats[k];
+                                     const accuracy = Math.round((stat.correct / stat.total) * 100);
+                                     const avgTime = stat.timeSum / stat.total;
+                                     const opChar = activeMode === 'MULTIPLICATION' ? '×' : activeMode === 'ADDITION' ? '+' : activeMode === 'SUBTRACTION' ? '−' : '÷';
+                                     return (
+                                        <div key={k} className={`flex items-center justify-between p-4 rounded-xl ${isKid ? 'bg-indigo-50' : 'bg-[#1e1e1e] border border-white/5'}`}>
+                                            <div className="text-xl font-mono font-bold w-24">
+                                                {selectedOperand} {opChar} {k}
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-bold uppercase tracking-wider mb-0.5 text-indigo-500">
+                                                    Extra
+                                                </div>
+                                                <div className="text-sm font-medium opacity-80">
+                                                    {(avgTime/1000).toFixed(1)}s avg • {accuracy}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                     )
+                                })}
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
