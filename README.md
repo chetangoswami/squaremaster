@@ -39,6 +39,16 @@ The project is built as a client-side Single Page Application (SPA) for maximum 
 *   **AI SDK**: `@google/genai`
 *   **State Management**: React Hooks (local state) + LocalStorage (persistence)
 
+## Roadmap & Future Refinements
+
+We are actively working to improve the pedagogical and technical aspects of the app. See [ROADMAP.md](./ROADMAP.md) for the full implementation plan.
+
+**Highlights:**
+*   [ ] **Spaced Repetition System (SRS)**: Moving to a SuperMemo-2 algorithm for long-term retention.
+*   [ ] **Voice Input**: Hands-free practice mode.
+*   [ ] **Cloud Sync**: Cross-device progress tracking.
+*   [ ] **Gamification**: Daily streaks and unlockable themes.
+
 ## Installation & Development
 
 ### Prerequisites
