@@ -1,8 +1,10 @@
 # SquareMaster AI
 
-![Build Status](https://img.shields.io/badge/build-passing-success)
+[![Live Demo](https://img.shields.io/badge/demo-online-success)](https://squaremaster-ai.vercel.app/)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Tech Stack](https://img.shields.io/badge/stack-React_TypeScript_Vite-3178C6)
+
+**[🚀 Launch Live App](https://squaremaster-ai.vercel.app/)**
 
 **SquareMaster AI** is a high-performance progressive web application (PWA) designed to optimize mental arithmetic through adaptive algorithms and generative AI. 
 
