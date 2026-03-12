@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameSettings } from '../../types';
-import { getGeneralStudyAdvice } from '../../services/geminiService';
+import { getGeneralStudyAdvice } from '../../services/aiService';
 import ReactMarkdown from 'react-markdown';
 
 interface StudyProps {

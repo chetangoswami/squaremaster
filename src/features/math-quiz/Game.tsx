@@ -83,7 +83,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   }, [settings, isKid, weightsKid, weightsNorm]);
 
   useEffect(() => {
-    return () => { if (settings.smartMode) saveWeights(settings.mode, weightsRef.current, isKid); };
+    return () => { if (settings.smartMode) saveWeights(settings.mode, isKid, weightsRef.current); };
   }, [settings, isKid]);
 
   // Enhanced Probabilistic Selection Algorithm
@@ -313,7 +313,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
   }, [timeLeft, isPlaying]);
 
   const handleFinish = () => {
-    if (settings.smartMode) saveWeights(settings.mode, weightsRef.current, isKid);
+    if (settings.smartMode) saveWeights(settings.mode, isKid, weightsRef.current);
     onFinish({ totalQuestions: history.length, correct: correctCount, score, history, startTime, endTime: Date.now(), problematicKeys: [] });
   };
 
