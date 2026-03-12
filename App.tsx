@@ -1,36 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { AppView, GameSettings, GameStats, SessionRecord } from './types';
-import Home from './components/Home';
-import Game from './components/Game';
-import Results from './components/Results';
-import Study from './components/Study';
-import Stats from './components/Stats';
-import { incrementGamesPlayed, loadSettings, saveSettings, saveSession } from './services/storageService';
+import React from 'react';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { GameStats, SessionRecord } from './src/types';
+import Dashboard from './src/features/dashboard/Dashboard';
+import Game from './src/features/math-quiz/Game';
+import Results from './src/features/math-quiz/Results';
+import Study from './src/features/math-quiz/Study';
+import Stats from './src/features/math-quiz/Stats';
+import SecretAlphabet from './src/features/alpha-quiz/SecretAlphabet';
+import { useAppStore } from './src/store/useAppStore';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
+  const navigate = useNavigate();
   
-  const [settings, setSettings] = useState<GameSettings>(() => {
-    const saved = loadSettings();
-    return saved || {
-      mode: 'ADDITION', // Default to Addition for easier entry
-      min: 1,
-      max: 20,
-      min2: 1,   
-      max2: 10,  
-      duration: 60,
-      smartMode: true,
-      kidMode: false
-    };
-  });
-
-  const [lastStats, setLastStats] = useState<GameStats | null>(null);
-  const [historicalSettings, setHistoricalSettings] = useState<GameSettings | null>(null);
-
-  // Persist settings whenever they change
-  useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
+  const {
+    settings,
+    setSettings,
+    lastStats,
+    setLastStats,
+    historicalSettings,
+    setHistoricalSettings,
+    addSession,
+    incrementGamesPlayed
+  } = useAppStore();
 
   const handleGameFinish = (stats: GameStats) => {
     incrementGamesPlayed(settings.kidMode);
@@ -48,10 +39,10 @@ const App: React.FC = () => {
         duration: settings.duration,
         optionsMode: !!settings.optionsMode
     };
-    saveSession(session);
+    addSession(session);
 
     setLastStats(stats);
-    setCurrentView(AppView.RESULTS);
+    navigate('/results');
   };
 
   const handleSessionSelect = (session: SessionRecord) => {
@@ -74,68 +65,69 @@ const App: React.FC = () => {
           kidMode: session.isKid
       });
 
-      setCurrentView(AppView.RESULTS);
-  };
-
-  const renderView = () => {
-    switch (currentView) {
-      case AppView.HOME:
-        return (
-          <Home 
-            settings={settings} 
-            setSettings={setSettings} 
-            changeView={setCurrentView} 
-          />
-        );
-      case AppView.GAME:
-        return (
-          <Game 
-            settings={settings} 
-            onFinish={handleGameFinish} 
-            onExit={() => setCurrentView(AppView.HOME)}
-          />
-        );
-      case AppView.RESULTS:
-        const displaySettings = historicalSettings || settings;
-        return lastStats ? (
-          <Results 
-            stats={lastStats} 
-            settings={displaySettings}
-            onRestart={() => { 
-                setHistoricalSettings(null);
-                setCurrentView(AppView.GAME); 
-            }} 
-            onHome={() => { 
-                setHistoricalSettings(null);
-                setCurrentView(AppView.HOME); 
-            }} 
-          />
-        ) : (
-          <Home settings={settings} setSettings={setSettings} changeView={setCurrentView} />
-        );
-      case AppView.STUDY:
-        return (
-          <Study 
-            settings={settings}
-            onBack={() => setCurrentView(AppView.HOME)}
-          />
-        );
-      case AppView.STATS:
-        return (
-            <Stats 
-                settings={settings}
-                onBack={() => setCurrentView(AppView.HOME)}
-                onSessionSelect={handleSessionSelect}
-            />
-        );
-      default:
-        return <Home settings={settings} setSettings={setSettings} changeView={setCurrentView} />;
-    }
+      navigate('/results');
   };
 
   return (
     <div className={`antialiased min-h-screen transition-colors duration-500 ${settings.kidMode ? 'bg-sky-100' : ''}`}>
-      {renderView()}
+      <Routes>
+        <Route path="/" element={
+          <Dashboard 
+            settings={settings} 
+            setSettings={setSettings} 
+            changeView={(view) => {
+              if (view === 'GAME') navigate('/game');
+              else if (view === 'STUDY') navigate('/study');
+              else if (view === 'STATS') navigate('/stats');
+              else if (view === 'SECRET_ALPHABET') navigate('/alphabet');
+            }} 
+          />
+        } />
+        <Route path="/game" element={
+          <Game 
+            settings={settings} 
+            onFinish={handleGameFinish} 
+            onExit={() => navigate('/')}
+          />
+        } />
+        <Route path="/results" element={
+          lastStats ? (
+            <Results 
+              stats={lastStats} 
+              settings={historicalSettings || settings}
+              onRestart={() => { 
+                  setHistoricalSettings(null);
+                  navigate('/game'); 
+              }} 
+              onHome={() => { 
+                  setHistoricalSettings(null);
+                  navigate('/'); 
+              }} 
+            />
+          ) : (
+            <Navigate to="/" replace />
+          )
+        } />
+        <Route path="/study" element={
+          <Study 
+            settings={settings}
+            onBack={() => navigate('/')}
+          />
+        } />
+        <Route path="/stats" element={
+          <Stats 
+            settings={settings}
+            onBack={() => navigate('/')}
+            onSessionSelect={handleSessionSelect}
+          />
+        } />
+        <Route path="/alphabet" element={
+          <SecretAlphabet 
+            onBack={() => navigate('/')}
+          />
+        } />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </div>
   );
 };

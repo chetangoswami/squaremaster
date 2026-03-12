@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GameSettings, GameMode, SessionRecord, AnswerRecord } from '../types';
-import { loadWeights, getTotalGamesPlayed, loadSessions } from '../services/storageService';
+import { GameSettings, GameMode, SessionRecord, AnswerRecord } from '../../types';
+import { useAppStore } from '../../store/useAppStore';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface StatsProps {
@@ -24,6 +24,7 @@ interface BreakdownData {
 }
 
 const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
+  const { totalGamesPlayedKid, totalGamesPlayedNorm, sessions: allSessions, weightsKid, weightsNorm } = useAppStore();
   const [activeMode, setActiveMode] = useState<GameMode>('MULTIPLICATION'); // Default to Multiply as per user focus
   const [weights, setWeights] = useState<Record<number, number>>({});
   const [totalGames, setTotalGames] = useState(0);
@@ -33,14 +34,13 @@ const Stats: React.FC<StatsProps> = ({ settings, onBack, onSessionSelect }) => {
   const isKid = settings.kidMode;
 
   useEffect(() => {
-    setTotalGames(getTotalGamesPlayed(isKid));
-    const allSessions = loadSessions();
+    setTotalGames(isKid ? totalGamesPlayedKid : totalGamesPlayedNorm);
     setSessions(allSessions.filter(s => s.isKid === isKid));
-  }, [isKid]);
+  }, [isKid, totalGamesPlayedKid, totalGamesPlayedNorm, allSessions]);
 
   useEffect(() => {
-    setWeights(loadWeights(activeMode, isKid));
-  }, [activeMode, isKid]);
+    setWeights(isKid ? weightsKid[activeMode] || {} : weightsNorm[activeMode] || {});
+  }, [activeMode, isKid, weightsKid, weightsNorm]);
 
   // Determine grid range
   const getRange = () => {

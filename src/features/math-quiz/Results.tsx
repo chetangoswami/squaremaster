@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { GameStats, AnswerRecord, GameSettings } from '../types';
+import { GameStats, AnswerRecord, GameSettings } from '../../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { getMentalMathTip } from '../services/geminiService';
+import { getMentalMathTip } from '../../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 interface ResultsProps {

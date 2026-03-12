@@ -1,16 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { AppView, GameSettings, GameMode } from '../types';
-import { clearWeights, saveModeConfig, loadModeConfig } from '../services/storageService';
+import { AppView, GameSettings, GameMode } from '../../types';
+import { useAppStore } from '../../store/useAppStore';
 
 interface HomeProps {
   settings: GameSettings;
-  setSettings: (settings: GameSettings) => void;
-  changeView: (view: AppView) => void;
+  setSettings: (settings: Partial<GameSettings>) => void;
+  changeView: (view: AppView | string) => void;
 }
 
 const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
+  const { saveModeConfig, modeConfigsKid, modeConfigsNorm, clearProgress } = useAppStore();
   const [cleared, setCleared] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [secretClicks, setSecretClicks] = useState(0);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
+
+  const loadModeConfig = (mode: GameMode, isKid: boolean) => {
+    return isKid ? modeConfigsKid[mode] : modeConfigsNorm[mode];
+  };
 
   useEffect(() => {
     const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -116,10 +142,21 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
   };
 
   const handleClearProgress = () => {
-      clearWeights();
+      clearProgress();
       setCleared(true);
       setTimeout(() => setCleared(false), 2000);
   };
+
+  const handleSecretClick = () => {
+    setSecretClicks(prev => prev + 1);
+  };
+
+  useEffect(() => {
+    if (secretClicks >= 5) {
+      setSecretClicks(0);
+      changeView(AppView.SECRET_ALPHABET);
+    }
+  }, [secretClicks, changeView]);
 
   const modes: { id: GameMode; label: string; icon: string }[] = [
       { id: 'SQUARES', label: 'Squares', icon: 'square_foot' },
@@ -157,7 +194,10 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
         
         {/* Header */}
         <div className="text-center space-y-2 mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-2 bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg">
+          <div 
+            onClick={handleSecretClick}
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-2 bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg cursor-pointer select-none"
+          >
              <span className="material-symbol text-white text-4xl">calculate</span>
           </div>
           <h1 className={`text-3xl font-bold tracking-tight ${isKid ? 'text-[#1d1b20]' : 'text-white'}`}>
@@ -314,13 +354,25 @@ const Home: React.FC<HomeProps> = ({ settings, setSettings, changeView }) => {
             </div>
             
             {/* FAB / CTA */}
-            <button
-                onClick={handleStart}
-                className={`mt-8 w-full h-14 rounded-full font-medium text-lg shadow-md transition-transform active:scale-[0.98] flex items-center justify-center gap-2 ${primaryFill}`}
-            >
-                <span className="material-symbol">play_arrow</span>
-                Start Session
-            </button>
+            <div className="mt-8 space-y-4">
+              <button
+                  onClick={handleStart}
+                  className={`w-full h-14 rounded-full font-medium text-lg shadow-md transition-transform active:scale-[0.98] flex items-center justify-center gap-2 ${primaryFill}`}
+              >
+                  <span className="material-symbol">play_arrow</span>
+                  Start Session
+              </button>
+
+              {deferredPrompt && (
+                <button
+                    onClick={handleInstallClick}
+                    className={`w-full h-12 rounded-full font-medium text-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2 ${secondaryFill}`}
+                >
+                    <span className="material-symbol">download</span>
+                    Install App
+                </button>
+              )}
+            </div>
         </div>
 
         {/* Secondary Actions */}

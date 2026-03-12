@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AppView, GameSettings, GameStats, Question, AnswerRecord } from '../types';
-import { loadWeights, saveWeights, getInitialWeight } from '../services/storageService';
+import { AppView, GameSettings, GameStats, Question, AnswerRecord } from '../../types';
+import { useAppStore } from '../../store/useAppStore';
 import DraggableNumpad from './DraggableNumpad';
+
+// Heuristic difficulty: 7, 8, 9, 12, 13, 14, 15 are inherently harder for most people
+const HARD_NUMBERS = [7, 8, 9, 12, 13, 14, 15, 17, 18, 19];
+const EASY_NUMBERS = [0, 1, 2, 5, 10, 11, 20];
+
+export const getInitialWeight = (num: number, storedWeight?: number): number => {
+  if (storedWeight !== undefined) return storedWeight;
+  if (EASY_NUMBERS.includes(num)) return 0.8;
+  if (HARD_NUMBERS.includes(num)) return 1.5;
+  return 1.0;
+};
 
 interface GameProps {
   settings: GameSettings;
@@ -10,6 +21,7 @@ interface GameProps {
 }
 
 const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
+  const { weightsKid, weightsNorm, saveWeights } = useAppStore();
   const [isPlaying, setIsPlaying] = useState(false);
   const [timeLeft, setTimeLeft] = useState(settings.duration);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -57,7 +69,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
 
   useEffect(() => {
     if (settings.smartMode) {
-        const persisted = loadWeights(settings.mode, isKid);
+        const persisted = isKid ? weightsKid[settings.mode] || {} : weightsNorm[settings.mode] || {};
         const activeWeights: Record<number, number> = {};
         const initRange = (min: number, max: number) => {
             for (let i = min; i <= max; i++) {
@@ -68,7 +80,7 @@ const Game: React.FC<GameProps> = ({ settings, onFinish, onExit }) => {
         if (settings.mode !== 'SQUARES') initRange(settings.min2, settings.max2);
         weightsRef.current = activeWeights;
     }
-  }, [settings, isKid]);
+  }, [settings, isKid, weightsKid, weightsNorm]);
 
   useEffect(() => {
     return () => { if (settings.smartMode) saveWeights(settings.mode, weightsRef.current, isKid); };
